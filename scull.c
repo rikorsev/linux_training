@@ -19,7 +19,7 @@ long scull_ioctl(/*struct inode* node, */struct file* f, unsigned int i_num, uns
 int scull_open(struct inode* node, struct file* f);
 int scull_release(struct inode* node, struct file* f);
 
-static void /*__exit*/ scull_cleanup(void);
+static void __exit scull_cleanup(void);
 
 struct file_operations scull_fops = {
     .owner = THIS_MODULE,
@@ -77,15 +77,12 @@ static void scull_setup_cdev(struct scull_dev *dev, int index)
     }
 }
 
-static int /*__init*/ scull_init(void)
+static int __init scull_init(void)
 {
   int index;
   int result;
   dev_t dev;
 
-  int* err_ptr = NULL;
-  int zero_devision_result;
-  
   printk(KERN_DEBUG "scull: init\n");
   
   if(scull_major != 0)
@@ -124,17 +121,10 @@ static int /*__init*/ scull_init(void)
       scull_setup_cdev((struct scull_dev*)&scull_dev_set_ptr[index], index);
     }
 
-  *err_ptr = 1234;
-  printk(KERN_DEBUG "scull: dereference of NULL ptr. dereferenced value = %d/n", *err_ptr);
-
-  zero_devision_result = 1234/0;
-  printk(KERN_DEBUG "scull: zero devision result = %d/n", zero_devision_result);
-  //scull_setup_cdev(struct scull_dev *dev, int index);
-
   return result;
 }
 
-static void /*__exit*/ scull_cleanup(void)
+static void __exit scull_cleanup(void)
 {
   int index;
   
