@@ -1,9 +1,9 @@
-obj-m := scull.o hello.o sync.o
+obj-m := scull.o hello.o sync.o threads.o
 MY_CFLAGS += -g -DDEBUG
 ccflags += ${MY_CFLAGS}
 cc += ${MY_CFLAGS}
 
-KERNELDIR := ~/study/linux_kernal/linux-4.6.2
+KERNELDIR := ../linux-4.6.2
 
 all:
 	$(MAKE) -C $(KERNELDIR) SUBDIRS=$(CURDIR) modules

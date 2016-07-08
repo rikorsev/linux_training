@@ -118,6 +118,9 @@ static int __init scull_init(void)
 	  scull_cleanup();
 	  return -ENOMEM;
 	}
+      scull_dev_set_ptr[index]->quantum = scull_quantum;
+      scull_dev_set_ptr[index]->qset = scull_qset;
+      sema_init(&scull_dev_set_ptr[index]->sem, 1);
       scull_setup_cdev((struct scull_dev*)&scull_dev_set_ptr[index], index);
     }
 
