@@ -5,8 +5,10 @@
 #include <linux/sched.h> /* for schedule_timeout */
 #include <linux/jiffies.h> 
 
+MODULE_LICENSE("GPL");
+
 static void incrementer(struct work_struct* work);
-static void decrementer(struct delayed_work* work);
+static void decrementer(struct work_struct* work);
 
 static int some_val_dec = 65535;
 static int some_val_inc = 0;
@@ -17,7 +19,7 @@ struct work_struct work_inc;
 
 static struct task_struct* th;
 
-static void decrementer(struct delayed_work* work)
+static void decrementer(struct work_struct* work)
 {
   some_val_dec--;
   printk(KERN_DEBUG "th: dec %d\n", some_val_dec);
@@ -42,14 +44,15 @@ static int th_entery(void* data)
   while(1)
     {
       schedule_timeout(msecs_to_jiffies(1000));
-      if(0 != queue_work(wq, &work_inc))
+      /*if(0 != queue_work(wq, &work_inc))
 	{
 	  printk(KERN_WARNING "th: can't add work_inc to wq\n");
 	}
       if(0 != queue_delayed_work(wq, &work_dec, msecs_to_jiffies(500)))
 	{
 	  printk(KERN_WARNING "th: can't add work_dec to wq\n");
-	}
+	  }*/
+      printk( KERN_DEBUG "+\n");
     }
 
   return 0;
