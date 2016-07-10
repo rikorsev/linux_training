@@ -31,6 +31,7 @@ static void incrementer(struct work_struct* work)
   printk(KERN_DEBUG "th: inc %d\n", some_val_inc);
   
   /* workqueues can runs non atomic, so let's check it here */
+  set_current_state(TASK_INTERRUPTIBLE);
   schedule_timeout(msecs_to_jiffies(500));
 
   printk(KERN_DEBUG "th: inc exit\n");
@@ -39,19 +40,24 @@ static void incrementer(struct work_struct* work)
 static int th_entery(void* data)
 {
 
-  printk("th: entered\n");
+  printk(KERN_DEBUG "th: entered\n");
 
   while(1)
     {
-      schedule_timeout(msecs_to_jiffies(1000));
-      /*if(0 != queue_work(wq, &work_inc))
+      set_current_state(TASK_INTERRUPTIBLE);
+      if(0 != schedule_timeout(msecs_to_jiffies(5000)))
+	{
+	  printk(KERN_WARNING "th: schadule timeout - fail\n");
+	  break;
+	}
+      if(false == queue_work(wq, &work_inc))
 	{
 	  printk(KERN_WARNING "th: can't add work_inc to wq\n");
 	}
-      if(0 != queue_delayed_work(wq, &work_dec, msecs_to_jiffies(500)))
+      if(false == queue_delayed_work(wq, &work_dec, msecs_to_jiffies(500)))
 	{
 	  printk(KERN_WARNING "th: can't add work_dec to wq\n");
-	  }*/
+	}
       printk( KERN_DEBUG "+\n");
     }
 
@@ -66,7 +72,7 @@ static int th_init(void)
 
   //kthread_run(th_entery, 0, "th");
   th = kthread_create(th_entery, 0, "th");
-  if(0 != wake_up_process(th))
+  if(0 == wake_up_process(th))
     {
       printk(KERN_WARNING "th: can't starts th thread\n");
     }
@@ -79,6 +85,9 @@ module_init(th_init);
 static void th_exit(void)
 {
   int status;
+
+  printk(KERN_DEBUG "th:exit\n");
+
   flush_workqueue(wq);
   destroy_workqueue(wq);
 
