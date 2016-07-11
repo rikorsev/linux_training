@@ -1,4 +1,4 @@
-obj-m := scull.o hello.o sync.o threads.o
+obj-m := scull.o hello.o sync.o threads.o lktm_semaphores.o
 MY_CFLAGS += -g -DDEBUG
 ccflags += ${MY_CFLAGS}
 cc += ${MY_CFLAGS}
@@ -11,3 +11,7 @@ debug:
 	$(MAKE) -C $(KERNELDIR) SUBDIRS=$(CURDIR) modules EXTRA_CFLAGS="$(MY_CFLAGS)"
 clean:
 	rm -rf $(obj-m) $(obj-m:.o=.mod.c) $(obj-m:.o=.mod.o)
+clean_all: clean
+	rm -rf $(obj-m:.o=.ko)
+clean_emacs_tmp:
+	rm -rf $(shell ls | grep ~$)
