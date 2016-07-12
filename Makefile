@@ -9,9 +9,9 @@ all:
 	$(MAKE) -C $(KERNELDIR) SUBDIRS=$(CURDIR) modules
 debug:
 	$(MAKE) -C $(KERNELDIR) SUBDIRS=$(CURDIR) modules EXTRA_CFLAGS="$(MY_CFLAGS)"
-clean:
+clean: clean_emacs_tmp
 	rm -rf $(obj-m) $(obj-m:.o=.mod.c) $(obj-m:.o=.mod.o)
 clean_all: clean
-	rm -rf $(obj-m:.o=.ko)
+	rm -rf $(obj-m:.o=.ko) modules.order Module.symvers
 clean_emacs_tmp:
-	rm -rf $(shell ls | grep ~$)
+	rm -rf *~
