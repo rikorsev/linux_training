@@ -1,4 +1,4 @@
-obj-m := lktm_scull.o lktm_hello.o lktm_sync.o lktm_threads.o lktm_semaphores.o
+obj-m := lktm_scull.o lktm_hello.o lktm_sync.o lktm_threads.o lktm_completions.o
 MY_CFLAGS += -g -DDEBUG
 ccflags += ${MY_CFLAGS}
 cc += ${MY_CFLAGS}
