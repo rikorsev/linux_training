@@ -10,7 +10,6 @@ MODULE_LICENSE("GPL");
 
 #define NUM_OF_WAITERS 3
 
-//static struct completion compl_a;
 static struct completion compl_b;
 static struct completion compl_waiter_a;
 static struct completion compl_waiter_b;
@@ -25,7 +24,7 @@ static void __exit compl_clenup(void);
 inline static struct task_struct* kthread_create_and_run(int (*entery)(void* data), void* data, char* name)
 {
   struct task_struct* th;
-th = kthread_create(entery, data, name);
+  th = kthread_create(entery, data, name);
   if(NULL == th)
     {
       printk(KERN_WARNING "compl: thread %s creation fail\n", name);
@@ -62,9 +61,7 @@ static int compl_th_waiter_a_entery(void* data)
 {
   printk(KERN_DEBUG "compl: waiter A entery\n");
   
-  //init_completion(&compl_a);
-
-  while(false == kthread_should_stop())
+   while(false == kthread_should_stop())
     {
       th_initializer = kthread_create_and_run(compl_th_initializer_entery, 0, "th_initializer");
       if(NULL == th_initializer)
@@ -74,15 +71,11 @@ static int compl_th_waiter_a_entery(void* data)
 	}
       
       complete_all(&compl_waiter_a);
-      //reinit_completion(&compl_a);
- 
+   
       printk(KERN_DEBUG "compl: waiter A: compl INIT: start waiting...\n");
       wait_for_completion(&compl_b);
       printk(KERN_DEBUG "compl: waiter A: compl INIT: completion recived\n");
 
-      //set_current_state(TASK_INTERRUPTIBLE);
-      //schedule_timeout(msecs_to_jiffies(5000));
-      
       wait_for_completion(&compl_waiter_b);
       printk(KERN_DEBUG "compl: waiter A: recive completion from waiter B\n");
 
@@ -95,7 +88,6 @@ static int compl_th_waiter_a_entery(void* data)
   th_waiter_a_exit:
   
   printk(KERN_DEBUG "compl: waiter A exit\n");
-  //complete_and_exit(&compl_waiter_a, 0);
   complete_all(&compl_waiter_a);
   complete_all(&compl_b);
   kthread_stop(th_waiter_b);
@@ -116,7 +108,6 @@ static int compl_th_waiter_b_entery(void* data)
       if(0 == wait_for_completion_timeout(&compl_waiter_a, msecs_to_jiffies(5000)))
 	{
 	  printk(KERN_DEBUG "compl: waiter B: waiting for A - timeout\n");
-	  //continue;
 	}
       else
 	{
@@ -127,7 +118,6 @@ static int compl_th_waiter_b_entery(void* data)
       if(0 == wait_for_completion_timeout(&compl_b, msecs_to_jiffies(5000)))
 	{
 	  printk(KERN_DEBUG "compl: waiter B: waiting for INIT timeout\n");
-	  //continue;
 	}
       else
 	{
@@ -137,7 +127,6 @@ static int compl_th_waiter_b_entery(void* data)
       complete(&compl_waiter_b);
     }
 
-  //waiter_b_exit:
   printk(KERN_DEBUG "compl: waiter B exit\n");
   complete_and_exit(&compl_waiter_b, 0);
 
@@ -158,8 +147,6 @@ static int compl_th_waiter_c_entery(void* data)
       if(0 == wait_for_completion_timeout(&compl_waiter_a, msecs_to_jiffies(5000)))
 	{
 	  printk(KERN_DEBUG "compl: waiter C: waiting for A timeout!!!\n");
-	  //continue;
-	  //	  goto waiter_c_exit;
 	}
       else
 	{
@@ -170,8 +157,6 @@ static int compl_th_waiter_c_entery(void* data)
 	if(0 == wait_for_completion_timeout(&compl_b, msecs_to_jiffies(5000)))
 	{
 	  printk(KERN_DEBUG "compl: waiter C: waiting for INIT timeout!!!\n");
-	  //	  continue;
-	  //goto waiter_c_exit;
 	}
       else
 	{
@@ -181,7 +166,6 @@ static int compl_th_waiter_c_entery(void* data)
       complete(&compl_waiter_c);
     }
 
-  //waiter_c_exit:
   printk(KERN_DEBUG "compl: waiter C exit\n");
   complete_and_exit(&compl_waiter_c, 0);
 

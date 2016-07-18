@@ -70,7 +70,6 @@ static int th_init(void)
 
   INIT_WORK(&work_inc, incrementer);
 
-  //kthread_run(th_entery, 0, "th");
   th = kthread_create(th_entery, 0, "th");
   if(0 == wake_up_process(th))
     {
@@ -79,7 +78,6 @@ static int th_init(void)
 
   return 0;
 }
-
 module_init(th_init);
 
 static void th_exit(void)

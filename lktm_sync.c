@@ -3,7 +3,7 @@
 #include <linux/timer.h> /* timer API */
 #include <linux/interrupt.h> /* tasklet API */
 #include <linux/jiffies.h> /* jiffies API */
-
+#include <linux/delay.h> /* for delay functions */
 static void tasklet_run_timer_handler(unsigned long val);
 
 static int some_value = 0;
@@ -31,15 +31,21 @@ static void tasklet_run_timer_handler(unsigned long val)
 
 static void tasklet_handler(unsigned long val)
 {
-  printk(KERN_DEBUG "sync: tasklet exe\n");
+  printk(KERN_DEBUG "sync: tasklet starts\n");
 }
 
 static int sync_init(void)
 {
   printk(KERN_DEBUG "sync: init\n");
 
-  printk(KERN_DEBUG "sync: HZ = %d\n", HZ);
-  printk(KERN_DEBUG "sync: msecs_to_jiffies(1000) = %d\n", (int)msecs_to_jiffies(1000));
+  ndelay(1000);
+  printk(KERN_DEBUG "sync: ndelay(1000) expires\n");
+
+  udelay(1000);
+  printk(KERN_DEBUG "sync: udelay(1000) expires\n");
+
+  mdelay(1000);
+  printk(KERN_DEBUG "sync: mdelay(1000) expires\n");
   
   tasklet_init(&some_tasklet, tasklet_handler, 0);
   
