@@ -44,8 +44,8 @@ static int sync_init(void)
   udelay(1000);
   printk(KERN_DEBUG "sync: udelay(1000) expires\n");
 
-  mdelay(1000);
-  printk(KERN_DEBUG "sync: mdelay(1000) expires\n");
+  mdelay(100);
+  printk(KERN_DEBUG "sync: mdelay(100) expires\n");
   
   tasklet_init(&some_tasklet, tasklet_handler, 0);
   

@@ -25,24 +25,6 @@ static struct task_struct* th_INIT_a;
 static struct completion compl_INIT_b;
 static struct task_struct* th_INIT_b;
 
-
-inline static struct task_struct* kthread_create_and_run(int (*entery)(void* data), void* data, char* name)
-{
-  struct task_struct* th;
-  th = kthread_create(entery, data, name);
-  if(NULL == th)
-    {
-      printk(KERN_WARNING "compl: thread %s creation fail\n", name);
-      return th;
-    }
-  if(0 == wake_up_process(th))
-    {
-      printk(KERN_WARNING "compl: can't start thread %s\n", name);
-    } 
-
-  return th;
-}
-
 static int th_INIT_a_entery(void* data)
 {
   int i;
@@ -111,11 +93,11 @@ static int __init compl_init(void)
     {
       waiter[i].number = i;
       waiter[i].th = NULL;
-      waiter[i].th = kthread_create_and_run(waiter_thread_entery, &waiter[i].number, "waiter");
+      waiter[i].th = kthread_run(waiter_thread_entery, &waiter[i].number, "waiter");
     }
 
   th_INIT_b = kthread_create(th_INIT_b_entery, 0, "INIT b");
-  th_INIT_a = kthread_create_and_run(th_INIT_a_entery, 0, "INIT a");
+  th_INIT_a = kthread_run(th_INIT_a_entery, 0, "INIT a");
 
   return 0;
 }

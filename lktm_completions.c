@@ -21,23 +21,6 @@ static struct task_struct* th_initializer = NULL;
 
 static void __exit compl_clenup(void);
 
-inline static struct task_struct* kthread_create_and_run(int (*entery)(void* data), void* data, char* name)
-{
-  struct task_struct* th;
-  th = kthread_create(entery, data, name);
-  if(NULL == th)
-    {
-      printk(KERN_WARNING "compl: thread %s creation fail\n", name);
-      return th;
-    }
-  if(0 == wake_up_process(th))
-    {
-      printk(KERN_WARNING "compl: can't start thread %s\n", name);
-    } 
-
-  return th;
-}
-
 static int compl_th_initializer_entery(void* data)
 {
   int i;
@@ -63,7 +46,7 @@ static int compl_th_waiter_a_entery(void* data)
   
    while(false == kthread_should_stop())
     {
-      th_initializer = kthread_create_and_run(compl_th_initializer_entery, 0, "th_initializer");
+      th_initializer = kthread_run(compl_th_initializer_entery, 0, "th_initializer");
       if(NULL == th_initializer)
 	{
 	  printk(KERN_DEBUG"compl: initializer thread creation fail\n");
@@ -181,9 +164,9 @@ static int __init compl_init(void)
   init_completion(&compl_waiter_b);
   init_completion(&compl_waiter_c);
 
-  th_waiter_a = kthread_create_and_run(compl_th_waiter_a_entery, 0, "waiter_a");
-  th_waiter_b = kthread_create_and_run(compl_th_waiter_b_entery, 0, "waiter_b");
-  th_waiter_c = kthread_create_and_run(compl_th_waiter_c_entery, 0, "waiter_c");
+  th_waiter_a = kthread_run(compl_th_waiter_a_entery, 0, "waiter_a");
+  th_waiter_b = kthread_run(compl_th_waiter_b_entery, 0, "waiter_b");
+  th_waiter_c = kthread_run(compl_th_waiter_c_entery, 0, "waiter_c");
  
   if(NULL == th_waiter_a ||
      NULL == th_waiter_b ||
