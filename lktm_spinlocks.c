@@ -2,6 +2,7 @@
 #include <linux/init.h>
 #include <linux/spinlock.h>
 #include <linux/kthread.h>
+#include <linux/delay.h>
 
 DEFINE_SPINLOCK(lock);
 struct task_struct* th_a = NULL;
@@ -14,7 +15,12 @@ static int th_a_entery(void* data)
 
   do
     {
-      
+      spin_lock(&lock);
+      printk(KERN_DEBUG "slock: locked by thread A\n");
+      msleep(1000);
+      spin_unlock(&lock);
+      printk(KERN_DEBUG "slock: unlocked by thread B\n");
+      msleep(1000);
     }while(false == kthread_should_stop);
 
   printk(KERN_DEBUG "slock: thread A exit\n");
@@ -27,7 +33,18 @@ static int th_b_entery(void* data)
   
   do
     {
-	
+      if(true == spin_trylock(&lock))
+	{
+	  printk(KERN_DEBUG "slock: locked by thread B\n");
+	  msleep(1000);
+	  spin_unlock(&lock);
+	  printk(KERN_DEBUG "slock: unlocked by thread B\n");
+	}
+      else
+	{
+	  printk(KERN_DEBUG "slock: attempt to lock by thread B - fail \n");
+	}
+      msleep(1000);
     }while(false == kthread_should_stop());
 
   printk(KERN_DEBUG "slock: thread B exit \n");
