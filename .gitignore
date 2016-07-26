@@ -5,4 +5,5 @@ modules.order
 *.o
 *.mod.c
 *~
-.tmp_versions/
+\.tmp_versions/
+\.gitignore.save
