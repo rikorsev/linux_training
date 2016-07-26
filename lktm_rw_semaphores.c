@@ -1,7 +1,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/kthread.h>
-#include <linux/rwsem.h.
+#include <linux/rwsem.h>
 #include <linux/delay.h>
 
 #define NUM_OF_WRITERS 2
@@ -18,6 +18,12 @@ static int th_readers_entery(void* data)
   printk(KERN_DEBUG "rw_sem: READER thread %d entery\n", n);
   
   do{
+    down_read(&sem);
+    printk(KERN_DEBUG "rw_sem: reader %d lock\n", n);
+    msleep(1000);
+    up_read(&sem);
+    printk(KERN_DEBUG "rw_sem: reader %d unlock\n", n);
+    msleep(1000);
     
   }while(false == kthread_should_stop());
 
@@ -33,9 +39,16 @@ static int th_writers_entery(void* data)
   
   do{
     
-  }while(false = kthread_should_stop());
+    down_write(&sem);
+    printk(KERN_DEBUG "rw_sem: writer %d lock\n", n);
+    msleep(1000);
+    up_write(&sem);
+    printk(KERN_DEBUG "rw_sem: writer %d unlock", n);
+    msleep(1000);
+    
+  }while(false == kthread_should_stop());
 
-  printk(KERN_DEBUG "re_sem: WRITER thread &d exit\n", n);
+  printk(KERN_DEBUG "re_sem: WRITER thread %d exit\n", n);
   return 0;
 }
 
