@@ -22,7 +22,12 @@ static int th_readers_entery(void* data)
   complete(&init_comp);
 
   do{
-
+    read_lock(&lock);
+    printk(KERN_DEBUG"rw_spin: READER %d: lock\n", n);
+    mdelay(200);
+    read_unlock(&lock);
+    printk(KERN_DEBUG "rw_spin; READER %d: unlock\n", n);
+    msleep(1000);
   }while(false == kthread_should_stop());
 
   printk(KERN_DEBUG "rw_spin: READER %d: exit", n);
@@ -33,15 +38,20 @@ static int th_writers_entery(void* data)
 {
   init n = (*(int*)data) + 1;
 
-  printk(KERN_DEBUG "rw_spin: WRITER %d: entery\n. n");
+  printk(KERN_DEBUG "rw_spin: WRITER %d: entery\n", n);
 
   complete(&init_compl);
 
   do{
-
+    write_lock(&lock);
+    printk(KERN_DEBUG "rw_spin: WRITER %d: lock\n", n);
+    mdelay(200);
+    write_unlock(&lock);
+    printk(KERN_DEBUG "rw_spin: WRITER %d: unlock\n", n);
+    msleep(1000);
   }while(false == kthread_should_stop());
 
-  printk(KERN_DEBUG "rw_spin: WRITER %d: exit\n");
+  printk(KERN_DEBUG "rw_spin: WRITER %d: exit\n", n);
   return 0;
 }
 
