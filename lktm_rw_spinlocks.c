@@ -1,9 +1,9 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/kthread.h>
-#include <linux/spinlock.h>
+#include <linux/rwlock.h>
 #include <linux/delay.h>
-#include <linux/completions.h>
+#include <linux/completion.h>
 
 #define NUM_OF_WRITERS 2
 #define NUM_OF_READERS 3
@@ -19,14 +19,14 @@ static int th_readers_entery(void* data)
 
   printk(KERN_DEBUG "rw_spin: READER %d: entery\n", n);
 
-  complete(&init_comp);
+  complete(&init_compl);
 
   do{
     read_lock(&lock);
     printk(KERN_DEBUG"rw_spin: READER %d: lock\n", n);
     mdelay(200);
     read_unlock(&lock);
-    printk(KERN_DEBUG "rw_spin; READER %d: unlock\n", n);
+    printk(KERN_DEBUG "rw_spin: READER %d: unlock\n", n);
     msleep(1000);
   }while(false == kthread_should_stop());
 
@@ -36,7 +36,7 @@ static int th_readers_entery(void* data)
 
 static int th_writers_entery(void* data)
 {
-  init n = (*(int*)data) + 1;
+  int n = (*(int*)data) + 1;
 
   printk(KERN_DEBUG "rw_spin: WRITER %d: entery\n", n);
 
@@ -61,7 +61,7 @@ static int rw_spin_init(void)
 
   printk(KERN_DEBUG "rw_spin: init\n");
 
-  init_completion(&init_comp);
+  init_completion(&init_compl);
   rwlock_init(&lock);
 
   for( i = 0 ; i < NUM_OF_READERS; i++ )
@@ -70,17 +70,17 @@ static int rw_spin_init(void)
       wait_for_completion(&init_compl);
     }
 
-  for( i = 0 ; i < MUN_OF_WRITERS ; i++ )
+  for( i = 0 ; i < NUM_OF_WRITERS ; i++ )
     {
       writer[i] = kthread_run(th_writers_entery, &i, "writer %d", i);
-      wait_for_completion(%init_compl);
+      wait_for_completion(&init_compl);
     }
 
   return 0;
 }
 module_init(rw_spin_init);
 
-static vid rw_spin_exit(void)
+static void rw_spin_exit(void)
 {
   int i;
 
