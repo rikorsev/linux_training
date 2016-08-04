@@ -15,6 +15,7 @@ static struct completion init_comp;
 static struct task_struct* reader[NUM_OF_READERS];
 static struct task_struct* writer;
 static int* some_data = NULL;
+DEFINE_SPINLOCK(rcu_lock);
 
 static int th_readers_entery(void* data)
 {
@@ -26,6 +27,8 @@ static int th_readers_entery(void* data)
 
   do{
     
+    printk(KERN_DEBUG "rcu_test: READER %d: CPU %d\n", n, smp_processor_id());
+
     rcu_read_lock();
     printk(KERN_DEBUG "rcu_test: READER %d: lock\n", n);
     msleep(1000);
@@ -46,8 +49,10 @@ static int th_writers_entery(void* data)
   int* old_data = NULL; 
 
   printk(KERN_DEBUG "rcu_test: WRITER: entery\n");
- 
+
   do{
+    printk(KERN_DEBUG "rcu_test: WRITER: CPU %d\n", smp_processor_id());
+
     new_data = kmalloc(sizeof(int), GFP_KERNEL);
 
     if(NULL == new_data)
@@ -56,18 +61,23 @@ static int th_writers_entery(void* data)
 	continue;
       }
 
+    spin_lock(&rcu_lock);
+
     old_data = rcu_dereference(some_data);
     printk(KERN_DEBUG "rcu_test: WRITER: old_data %d\n", *old_data);
-    *new_data = *old_data++;
+    *new_data = (*old_data) + 1;
     printk(KERN_DEBUG "rcu_test: WRITER: new_data %d\n", *new_data);
     rcu_assign_pointer(some_data, new_data);
-
+    
+    printk(KERN_DEBUG "rcu_test: WRITER: synchronize_rcu - start\n");
     synchronize_rcu();
-    printk(KERN_DEBUG "rcu_test: WRITER: synchronize\n");
+    printk(KERN_DEBUG "rcu_test: WRITER: synchronize_rcu - stop\n");
+    
+    spin_unlock(&rcu_lock);
 
     kfree(old_data);
 
-    msleep(1000);
+    msleep(700);
   }while(false == kthread_should_stop());
   
   printk(KERN_DEBUG "rcu_test: WRITER: exit\n");
