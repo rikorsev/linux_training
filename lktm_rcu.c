@@ -3,14 +3,18 @@
 #include <linux/kthread.h>
 #include <linux/delay.h>
 #include <linux/completion.h>
-#include <linuc/rcupdate.h>
+#include <linux/rcupdate.h>
+#include <linux/spinlock.h>
+#include <linux/slab.h>
 
 #define NUM_OF_READERS 3
 
+MODULE_LICENSE("GPL");
+
 static struct completion init_comp;
-static task_struct* reader[NUM_OF_READERS];
-static task_struct* writer;
-static int some_data = 0;
+static struct task_struct* reader[NUM_OF_READERS];
+static struct task_struct* writer;
+static int* some_data = NULL;
 
 static int th_readers_entery(void* data)
 {
@@ -25,7 +29,8 @@ static int th_readers_entery(void* data)
     rcu_read_lock();
     printk(KERN_DEBUG "rcu_test: READER %d: lock\n", n);
     msleep(1000);
-    rcu_raed_unlock();
+    printk(KERN_DEBUG "rcu_test: READER %d: value %d\n", n, *rcu_dereference(some_data));
+    rcu_read_unlock();
     printk(KERN_DEBUG "rcu_test: READER %d: unlock\n", n);
     msleep(1000);
     
@@ -37,9 +42,30 @@ static int th_readers_entery(void* data)
 
 static int th_writers_entery(void* data)
 {
-  printk(KERN_DEBUG "rcu_test: WRITER: entery\n");
+  int* new_data = NULL;
+  int* old_data = NULL; 
 
+  printk(KERN_DEBUG "rcu_test: WRITER: entery\n");
+ 
   do{
+    new_data = kmalloc(sizeof(int), GFP_KERNEL);
+
+    if(NULL == new_data)
+      {
+	printk(KERN_WARNING "rcu_test: WRITER: can't allocate memory\n");
+	continue;
+      }
+
+    old_data = rcu_dereference(some_data);
+    printk(KERN_DEBUG "rcu_test: WRITER: old_data %d\n", *old_data);
+    *new_data = *old_data++;
+    printk(KERN_DEBUG "rcu_test: WRITER: new_data %d\n", *new_data);
+    rcu_assign_pointer(some_data, new_data);
+
+    synchronize_rcu();
+    printk(KERN_DEBUG "rcu_test: WRITER: synchronize\n");
+
+    kfree(old_data);
 
     msleep(1000);
   }while(false == kthread_should_stop());
@@ -53,6 +79,14 @@ static int __init rcu_test_init(void)
   int i;
   
   printk(KERN_DEBUG "rcu_test: init\n");
+
+  some_data = kmalloc(sizeof(int), GFP_KERNEL);
+  if(NULL == some_data) 
+    {
+      printk(KERN_WARNING "rcu_test: cant allocate memory\n");
+      return -1;
+    }
+  *some_data = 0;
 
   init_completion(&init_comp);
   
@@ -80,6 +114,8 @@ static void __exit rcu_test_exit(void)
     }
 
   if(NULL != writer) kthread_stop(writer);
+
+  if(NULL != some_data) kfree(some_data);
   
   printk(KERN_DEBUG "rcu_test: exit\n");
 }
