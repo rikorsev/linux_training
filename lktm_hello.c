@@ -1,12 +1,13 @@
-#include <linux/init.h>
-#include <linux/module.h>
-#include <linux/kernel.h>
+#include <linux/init.h> /* This include for macroses __init and __exit */
+#include <linux/module.h> /* This include for macroses module_init and module_exit */
+#include <linux/kernel.h> /* Contains log level defines such as KERN_ALERT and so on */
 
 MODULE_LICENSE("GPL");
 
 static int __init hello_init(void)
 {
   printk(KERN_ALERT "Hello, world!\n");
+  printf("Hello world\n");
   return 0;
 }
 
