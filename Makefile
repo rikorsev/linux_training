@@ -11,13 +11,12 @@ lktm_spinlocks.o \
 lktm_rw_semaphores.o \
 lktm_rw_spinlocks.o \
 lktm_seqlocks.o \
-lktm_rcu.o
+lktm_rcu.o \
+lktm_memory.o
 
 MY_CFLAGS += -g -DDEBUG
 ccflags += ${MY_CFLAGS}
 cc += ${MY_CFLAGS}
-
-#KERNELDIR := ../linux-4.6.2
 
 all:
 	$(MAKE) -C $(KERNEL_SOURCE) SUBDIRS=$(CURDIR) modules

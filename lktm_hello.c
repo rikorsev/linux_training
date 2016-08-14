@@ -7,7 +7,6 @@ MODULE_LICENSE("GPL");
 static int __init hello_init(void)
 {
   printk(KERN_ALERT "Hello, world!\n");
-  printf("Hello world\n");
   return 0;
 }
 
