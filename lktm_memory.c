@@ -2,15 +2,24 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
+#include <linux/mempool.h>
 
 MODULE_LICENSE("GPL");
 
+/* defines for kmalloc */
 #define KMALLOC_BUF_SIZE 512
+
+/* defines for mem_cache */
 #define KMEM_CACHE_SIZE 1024
 #define KMEM_NUM_OF_OBJ 10
 
+/* defines for mempool */
+#define MEMPOOL_OBJECTS_MIN 5
+#define MEMPOOL_OBJECTS_MAX 15
+
 static void kmalloc_test(void);
 static void lookaside_cache_test(void);
+static void mempool_test(void);
 
 static int __init mem_init(void)
 {
@@ -56,23 +65,16 @@ static void kmalloc_test(void)
   kfree(kmalloc_buf_ptr);
 }
 
-static void kmem_cache_construct(void* data /* kmem_cache_t* cache, unsifned lonf flags */)
+static void kmem_cache_construct(void* data)
 {
   int i = 0;
   static int j = 0;
   
-  //if( flags & SLAB_CTOR_CONSTRUCTOR )
-  //{
-      printk(KERN_DEBUG "mem: kmem_cache: construct\n");
-      for(i = 0; i < KMEM_CACHE_SIZE; i++, j++)
-	{
-	  ((int*)data)[i] = j;
-	}
-      // }
-      //else
-      // {
-      // printk(KERN_DEBUG "mem: kmem_cache: destructor\n");
-      //}
+  printk(KERN_DEBUG "mem: kmem_cache: construct\n");
+  for(i = 0; i < KMEM_CACHE_SIZE; i++, j++)
+    {
+      ((int*)data)[i] = j;
+    }
 }
 
 static void lookaside_cache_test(void)
@@ -119,3 +121,36 @@ static void lookaside_cache_test(void)
 
 }
 
+static void mempool_test(void)
+{
+  int i = 0;
+  struct kmem_cache* cache = NULL;
+  mempool_t* pool = NULL;
+  int* mempool_obj[MEMPOOL_OBJECTS_MAX];
+  
+  /* Standart realization */
+  cache = kmem_cache_create("cache", sizeof(int) * KMEM_CACHE_SIZE, 0, 0, kmem_cache_construct); 
+  pool = mempool_create(MEMPOOL_OBJECTS_MIN, mempool_alloc_slab, mempool_free_slab, cache);
+
+  for (i = 0; i < MEMPOOL_OBJECTS_MAX; i++)
+    {
+      mempool_obj[i] = mempool_alloc(pool, GFP_KERNEL);
+    }
+
+  for (i = 0; i < MEMPOOL_OBJECTS_MAX; i++)
+    {
+      printk(KERN_DEBUG "\nmem: mempool_obj %d \n\n", i);
+
+      for (j = 0; j < KMEM_CACHE_SIZE; j++)
+	{
+	  printk(KERN_DEBUG "mem: mempool_obj[%d][%d] = %d\n", i, j, mempool_obj[i][j]);
+	}
+    }
+
+  for (i = 0; i < MEMPOOL_OBJECTS_MAX; i++)
+    {
+      mempool_free(mempool_obj[i], pool);
+    }
+
+  mempool_destroy(pool);
+}
