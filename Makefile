@@ -12,7 +12,10 @@ lktm_rw_semaphores.o \
 lktm_rw_spinlocks.o \
 lktm_seqlocks.o \
 lktm_rcu.o \
-lktm_memory.o
+lktm_mem_kmalloc.o \
+lktm_mem_lookaside_cache.o \
+lktm_mem_get_free_pages.o \
+lktm_mem_alloc_pages.o 
 
 MY_CFLAGS += -g -DDEBUG
 ccflags += ${MY_CFLAGS}
