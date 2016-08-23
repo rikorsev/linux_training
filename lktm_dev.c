@@ -27,6 +27,17 @@ static long dev_ioctl(struct file * f, unsigned int ioctl, unsigned long data);
 static int dev_open(struct inode* node, struct file* f);
 static int dev_release(struct inode* node, struct file* f);
 
+extern void vled_set_state(bool state);
+extern bool vled_get_state(void);
+extern void vled_set_pwm(unsigned short pwm);
+extern unsigned short vled_get_pwm(void);
+
+/* ioctl's */
+#define IOCTL_SET_VLED_STATE 0
+#define IOCTL_GET_VLED_STATE 1
+#define IOCTL_SET_VLED_PWM 2
+#define IOCTL_GET_PWM_STATE 3
+
 typedef struct
 {
   char* buff;
@@ -52,6 +63,12 @@ static int __init dev_init(void)
 
   dev_register_num();
   dev_register_cdev();
+
+  //vled_set_state(true);
+  //vled_set_pwm(255);
+  
+  //printk(KERN_DEBUG "dev: current vled state is %s\n", true == vled_get_state() ? "on" : "off");
+  //printk(KERN_DEBUG "dev: current vled pwm is %d\n", vled_get_pwm());
   
   return 0;
 }
@@ -173,7 +190,29 @@ static ssize_t dev_write(struct file* f, const char __user* user_buff, size_t si
 
 static long dev_ioctl(struct file * f, unsigned int ioctl, unsigned long data)
 {
-  return 0;
+  long result = 0;
+  printk(KERN_DEBUG "dev: ioctl %d\n", ioctl);
+  
+  switch(ioctl)
+    {
+    case IOCTL_SET_VLED_STATE:
+      vled_set_state((bool)data);
+      break;
+
+    case IOCTL_GET_VLED_STATE:
+      result = (long) vled_get_state();
+      break;
+
+    case IOCTL_SET_VLED_PWM:
+      vled_set_pwm((unsigned short) data);
+      break;
+
+    case IOCTL_GET_PWM_STATE:
+      result = (long) vled_get_pwm();
+      break;
+    }
+  
+  return result;
 }
 
 static int dev_open(struct inode* node, struct file* f)
