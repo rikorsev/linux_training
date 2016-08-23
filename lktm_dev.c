@@ -180,7 +180,7 @@ static int dev_open(struct inode* node, struct file* f)
 {
   device_t *dev; /* device information */
 
-  printk(KERN_DEBUG "dev: open");
+  printk(KERN_DEBUG "dev: open\n");
 
   dev = container_of(node->i_cdev, device_t, cdev);
   f->private_data = dev; /* for othre methods */
