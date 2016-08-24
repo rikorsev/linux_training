@@ -17,7 +17,8 @@ lktm_mem_lookaside_cache.o \
 lktm_mem_get_free_pages.o \
 lktm_mem_alloc_pages.o \
 lktm_dev.o \
-lktm_vled.o
+lktm_vled.o \
+lktm_sysfs.o
 
 MY_CFLAGS += -g -DDEBUG
 ccflags += ${MY_CFLAGS}
