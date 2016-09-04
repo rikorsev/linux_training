@@ -35,8 +35,8 @@ extern unsigned short vled_get_pwm(void);
 /* ioctl's */
 #define IOCTL_SET_VLED_STATE 0
 #define IOCTL_GET_VLED_STATE 1
-#define IOCTL_SET_VLED_PWM 2
-#define IOCTL_GET_PWM_STATE 3
+#define IOCTL_SET_VLED_PWM 4
+#define IOCTL_GET_VLED_PWM 3
 
 typedef struct
 {
@@ -54,7 +54,8 @@ static struct file_operations dev_fops = {
   .release = dev_release,
   .read = dev_read,
   .write = dev_write,
-  .unlocked_ioctl = dev_ioctl
+  .unlocked_ioctl = dev_ioctl,
+  .compat_ioctl = dev_ioctl
 };
 
 static int __init dev_init(void)
@@ -153,6 +154,7 @@ static ssize_t dev_read(struct file* f, char __user* user_buff, size_t size, lof
   device_t* dev = f->private_data;
 
   printk(KERN_DEBUG "dev: read\n");
+  printk(KERN_DEBUG "dev: dev->sz: %d, size: %d", dev->sz, size);
   
   if(NULL == dev->buff || 0 == dev->sz) return 0;
 
@@ -191,8 +193,8 @@ static ssize_t dev_write(struct file* f, const char __user* user_buff, size_t si
 static long dev_ioctl(struct file * f, unsigned int ioctl, unsigned long data)
 {
   long result = 0;
-  printk(KERN_DEBUG "dev: ioctl %d\n", ioctl);
-  
+  printk(KERN_DEBUG "dev: ioctl %d, data %lx\n", ioctl, data);
+
   switch(ioctl)
     {
     case IOCTL_SET_VLED_STATE:
@@ -207,7 +209,7 @@ static long dev_ioctl(struct file * f, unsigned int ioctl, unsigned long data)
       vled_set_pwm((unsigned short) data);
       break;
 
-    case IOCTL_GET_PWM_STATE:
+    case IOCTL_GET_VLED_PWM:
       result = (long) vled_get_pwm();
       break;
     }
