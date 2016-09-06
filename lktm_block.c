@@ -22,41 +22,43 @@ module_param(blk_sector_size, short, 0);
 typedef struct
 {
   struct gendisk* disk;
-}blkdev_t;
+}blk_t;
 
-static blkdev_t my_blk;
+static blk_t my_blk;
 
-static void blkdev_request(struct request_queue* q);
+static void __exit blk_cleanup(void);
+static void blk_request(struct request_queue* q);
 
 /* device operations prototype */
-static int blkdev_open(struct block_device* dev, fmode_t mode);
-static void blkdev_close(struct gendisk* disk, fmode_t mode);
-static int blkdev_ioctl_handler(struct block_device* dev, fmode_t mode, unsigned int cmd, unsigned long data);
+static int blk_open(struct block_device* dev, fmode_t mode);
+static void blk_close(struct gendisk* disk, fmode_t mode);
+static int blk_ioctl_handler(struct block_device* dev, fmode_t mode, unsigned int cmd, unsigned long data);
 
 static const struct block_device_operations bdops = {
-  .open = blkdev_open,
-  .release = blkdev_close,
-  .ioctl = blkdev_ioctl_handler
+  .owner = THIS_MODULE,
+  .open = blk_open,
+  .release = blk_close,
+  .ioctl = blk_ioctl_handler
 };
 
-static int __init blkdev_init(void)
+static int __init blk_init(void)
 {
-  printk(KERN_DEBUG "blkdev: init\n");
+  printk(KERN_DEBUG "blk: init\n");
 
   /* if major number is 0, major number will be allocated automatically */
   blk_major = register_blkdev(blk_major, "lktmblk");
   if(0 >= blk_major)
     {
-      printk(KERN_WARNING "blkdev: block device allocation - fail\n");
+      printk(KERN_WARNING "blk: block device allocation - fail\n");
       return -1;
     }
-  printk(KERN_DEBUG "blkdev: registred, major number %d\n", blk_major);
+  printk(KERN_DEBUG "blk: registred, major number %d\n", blk_major);
 
   my_blk.disk = alloc_disk(blk_num);
   if(NULL == my_blk.disk)
     {
-      printk(KERN_WARNING "blkdev: disk allocation - fail\n");
-      blkdev_clenup();
+      printk(KERN_WARNING "blk: disk allocation - fail\n");
+      blk_cleanup();
       return -1;
     }
   
@@ -65,25 +67,25 @@ static int __init blkdev_init(void)
   my_blk.disk -> first_minor = 0;
   my_blk.disk -> fops = &bdops;
   my_blk.disk -> private_data = &my_blk;
-  my_blk.disk -> strcpy(my_blk.disk -> disk_name, "lktmblk");
-  my_blk.disk -> queue = blk_init_queue(blkdev_request, NULL);
+  strcpy(my_blk.disk -> disk_name, "lktmblk");
+  my_blk.disk -> queue = blk_init_queue(blk_request, NULL); /* second arg is a pointer to spinlock */
   if(NULL == my_blk.disk -> queue)
     {
-      printk(KERN_DEBUG "blkdev: request queue allocation - fail\n");
-      blkdev_cleanup();
+      printk(KERN_DEBUG "blk: request queue allocation - fail\n");
+      blk_cleanup();
       return -1;
     }
-  blk_queue_hardsect_size(my_blk.disk -> queue, blk_sector_size);
+  blk_queue_logical_block_size(my_blk.disk -> queue, blk_sector_size);
   set_capacity(my_blk.disk, blk_sectors_num);
   add_disk(my_blk.disk); /* It's alive! */
   
   return 0;
 }
-module_init(blkdev_init);
+module_init(blk_init);
 
-static void __exit blkdev_cleanup(void)
+static void __exit blk_cleanup(void)
 {
-  printk(KERN_DEBUG "blkdev: cleanup\n");
+  printk(KERN_DEBUG "blk: cleanup\n");
 
   if(0 < blk_major)
     {
@@ -98,35 +100,45 @@ static void __exit blkdev_cleanup(void)
   if(NULL != my_blk.disk)
     {
       /* free disk */
-      put_disk(my_blk.disk);
+      //put_disk(my_blk.disk);
+      del_gendisk(my_blk.disk);
     }
   
-  printk(KERN_DEBUG "blkdev: exit\n");
+  printk(KERN_DEBUG "blk: exit\n");
 }
-module_exit(blkdev_cleanup);
+module_exit(blk_cleanup);
 
-static void blkdev_request(struct request_queue* q)
+static void blk_request(struct request_queue* q)
 {
-  printk(KERN_DEBUG "blkdev: request handler entry\n");
+  struct request* req = NULL;
+  blk_t* blk = NULL;
+  
+  printk(KERN_DEBUG "blk: request handler entry\n");
 
-  printk(KERN_DEBUG "blkdev: request handler exit\n");
+  while((req = elv_next_request(q)) != NULL)
+    {
+      blk = req -> rq_disk -> private_data;
+      
+    }
+  
+  printk(KERN_DEBUG "blk: request handler exit\n");
 }
 
-static int blkdev_ioctl_handler(struct block_device* dev, fmode_t mode, unsigned int cmd, unsigned long data)
+static int blk_ioctl_handler(struct block_device* dev, fmode_t mode, unsigned int cmd, unsigned long data)
 {
-  printk(KERN_DEBUG "blkdev: ioctl %d data %ld", cmd, data);
+  printk(KERN_DEBUG "blk: ioctl %d data %ld", cmd, data);
 
   return 0;
 }
 
-static int blkdev_open(struct block_device* dev, fmode_t mode)
+static int blk_open(struct block_device* dev, fmode_t mode)
 {
-  printk(KERN_DEBUG "blkdev: open\n");
+  printk(KERN_DEBUG "blk: open\n");
 
   return 0;
 }
 
-static void blkdev_close(struct gendisk* disk, fmode_t mode)
+static void blk_close(struct gendisk* disk, fmode_t mode)
 {
-  printk(KERN_DEBUG "blkdev: close\n");
+  printk(KERN_DEBUG "blk: close\n");
 }
