@@ -4,6 +4,7 @@
 #include <linux/fs.h> /* to register_blkdev, unregister_blkdev functions */
 #include <linux/moduleparam.h>
 #include <linux/blkdev.h> /* for block device functions such as blk_init_queue */
+#include <linux/hdreg.h> /* for HDIO_GETGEO */ 
 
 MODULE_LICENSE("GPL");
 
@@ -38,8 +39,8 @@ static void blk_sector_construct(void* data);
 //static int blk_xfer_bio(blk_t *blk, struct bio *bio);
 static int blk_xfer_request(blk_t* blk, struct request *req);
 
-static int blk_read(blk_t blk, unsigned long sector, unsigned long nsect, char* buf);
-static int blk_write(blk_t blk, unsigned long sector, unsigned long nsect, char* buf);
+static int blk_read(blk_t* blk, unsigned long sector, unsigned long nsect, char* buf);
+static int blk_write(blk_t* blk, unsigned long sector, unsigned long nsect, char* buf);
 
 /* device operations prototype */
 static int blk_open(struct block_device* dev, fmode_t mode);
@@ -164,7 +165,7 @@ static void blk_request(struct request_queue* q)
   struct request* req = NULL;
   blk_t* blk = NULL;
   int trp = 0; /* amount of transported data */
-  struct req_iterator iter;
+  //struct req_iterator iter;
   
   printk(KERN_DEBUG "blk: request handler entry\n");
 
@@ -189,17 +190,18 @@ static void blk_request(struct request_queue* q)
 	}
             
       /* Transfer data TBD */
-       blk = req -> rq_disk -> private_data;
-      
-
+      blk = req -> rq_disk -> private_data;
+      /* 
        iter.bio = req->bio;
        
        rq_for_each_segment(,,)
 	{
 	  
 	}
-
+      */
       //      trp = blk_xfer_bio(blk, req->bio);
+
+      trp = blk_xfer_request(blk, req);
       
       blk_end_request(req, 0, trp); /* second arg 0 if success > 0 if error */
       
@@ -247,50 +249,54 @@ static int blk_xfer_request(blk_t* blk, struct request *req)
 {
 
 	struct req_iterator iter;
-	int nsect = 0;
-	struct bio_vec *bvec;
+	//int nsect = 0;
+	struct bio_vec bvec;
 	char* buffer = NULL;
-	sector_t sector = iter.bio->bi_iter.sector;
+	sector_t sector = 0;//iter.bio->bi_iter.sector;
+	int trp = 0;
+	
 	/* Macro rq_for_each_bio is gone.
 	 * In most cases one should use rq_for_each_segment.
 	 */
-	rq_for_each_segment(bvec, req, iter) {
-		buffer = __bio_kmap_atomic(iter.bio, iter.i, KM_USER0);
+	rq_for_each_segment(bvec, req, iter)
+	  {
+	    sector = iter.bio -> bi_iter.bi_sector;
+	    buffer = __bio_kmap_atomic(iter.bio, iter.iter);
 
-		/*sbull_transfer(dev, sector, bio_cur_sectors(iter.bio),
-			       buffer, bio_data_dir(iter.bio) == WRITE);
-		*/
+	    /*sbull_transfer(dev, sector, bio_cur_sectors(iter.bio),
+	      buffer, bio_data_dir(iter.bio) == WRITE);
+	    */
 
-		printk(KERN_DEBUG "blk: bio: bvec_iter: sector %d, size %d, index %d, done %d\n", 
-		       iter.bio->bvec_iter.bi_sector,
-		       iter.bio->bvec_iter.bi_size,
-		       iter.bio->bvec_iter.idx,
-		       iter.bio->bvec_iter.bi_bvec_done);
+	    printk(KERN_DEBUG "blk: bio: bvec_iter: sector %d, size %d, index %d, done %d\n", \
+		   (int)iter.bio -> bi_iter.bi_sector,			\
+		   iter.bio -> bi_iter.bi_size, \
+		   iter.bio -> bi_iter.bi_idx, \
+		   iter.bio -> bi_iter.bi_bvec_done);
 		
-		if(WRITE == bio_data_dir(bio))
-		  {
-		    trp = blk_write(blk, sector, bio_cur_sectors(bio), buffer);
-		    printk(KERN_DEBUG "blk: written %d bytes\n", trp)
-		  }
-		else
-		  {
-		    trp = blk_read(blk, sector, bio_cur_sectors(bio), buffer);
-		    printk(KERN_DEBUG "blk: readen %d bytes\n", trp);
-		  }
+	    if(WRITE == bio_data_dir(iter.bio))
+	      {
+		trp = blk_write(blk, sector, bio_sectors(iter.bio), buffer);
+		printk(KERN_DEBUG "blk: written %d bytes\n", trp);
+	      }
+	    else
+	      {
+		trp = blk_read(blk, sector, bio_sectors(iter.bio), buffer);
+		printk(KERN_DEBUG "blk: readen %d bytes\n", trp);
+	      }
 		
-		sector += bio_cur_sectors(iter.bio);
-		__bio_kunmap_atomic(iter.bio, KM_USER0);
-		nsect += iter.bio->bi_size/KERNEL_SECTOR_SIZE;
-	}
-	return nsect;
+	    //sector += bio_sectors(iter.bio);
+	    __bio_kunmap_atomic(iter.bio);
+	    //nsect += iter.bio->bi_size/KERNEL_SECTOR_SIZE;
+	  }
+	return trp;//nsect;
 }
 
 
 static int blk_ioctl_handler(struct block_device* dev, fmode_t mode, unsigned int cmd, unsigned long data)
 {
-  long size;
+  //long size;
   struct hd_geometry geo;
-  blk_t blk = dev->gendisk->private_data;
+  blk_t* blk = dev->bd_disk->private_data;
   int status = 0;
   
   printk(KERN_DEBUG "blk: ioctl %d data %ld", cmd, data);
@@ -301,12 +307,12 @@ static int blk_ioctl_handler(struct block_device* dev, fmode_t mode, unsigned in
 
       printk(KERN_DEBUG "blk: ioctl: get geometry\n");
       
-      geo.cylindres = 1;
+      geo.cylinders = 1;
       geo.heads = 1;
       geo.sectors = blk->sect_num;
       geo.start = 0;
 
-      if(copy_to_user((void __user *) arg, &geo, sizeof(geo)))
+      if(copy_to_user((void __user *) data, &geo, sizeof(geo)))
 	{
 	  printk(KERN_WARNING "blk: copy to user - fail\n");
 	  status = -EFAULT;
@@ -332,7 +338,7 @@ static void blk_close(struct gendisk* disk, fmode_t mode)
   printk(KERN_DEBUG "blk: close\n");
 }
 
-static int blk_read(blk_t blk, unsigned long sector, unsigned long nsect, char* buf)
+static int blk_read(blk_t* blk, unsigned long sector, unsigned long nsect, char* buf)
 {
   int i;
 
@@ -345,13 +351,13 @@ static int blk_read(blk_t blk, unsigned long sector, unsigned long nsect, char* 
   
   for(i = 0; i < nsect && sector < blk->sect_num; i++, sector++)
     {
-      printk(KERN_DEBUG "blk: read: sector %d\n", sector);
+      printk(KERN_DEBUG "blk: read: sector %d\n", (int)sector);
 
       if(NULL == blk->sector[sector])
 	{
-	  printk(KERN_DEBUG "blk: sector %s is empty\n", sector);
-	  i--;
-	  nsect--;
+	  printk(KERN_DEBUG "blk: sector %d is empty\n", (int)sector);
+	  //i--;
+	  //nsect--;
 	  continue;
 	}
       memcpy(buf + blk->sect_size * i, blk->sector[sector], blk->sect_size);
@@ -360,7 +366,7 @@ static int blk_read(blk_t blk, unsigned long sector, unsigned long nsect, char* 
   return blk->sect_size * i;
 }
 
-static int blk_write(blk_t blk, unsigned long sector, unsigned long nsect, char* buf)
+static int blk_write(blk_t* blk, unsigned long sector, unsigned long nsect, char* buf)
 {
   int i;
   
@@ -372,11 +378,11 @@ static int blk_write(blk_t blk, unsigned long sector, unsigned long nsect, char*
 
   for(i = 0; i < nsect && sector < blk->sect_num; i++, sector++)
     {
-      printk(KERN_DEBUG "blk: write: sector %d\n", sector);
+      printk(KERN_DEBUG "blk: write: sector %d\n", (int)sector);
 
       if(NULL == blk->sector[sector])
 	{
-	  printk(KERN_DEBUG "blk: allocate new sector %d\n", sector);
+	  printk(KERN_DEBUG "blk: allocate new sector %d\n", (int)sector);
 	  blk->sector[sector] = kmem_cache_alloc(blk->cache, GFP_KERNEL);
 	  if(NULL == blk->sector[sector])
 	    {
