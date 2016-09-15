@@ -5,6 +5,7 @@
 #include <linux/moduleparam.h>
 #include <linux/blkdev.h> /* for block device functions such as blk_init_queue */
 #include <linux/hdreg.h> /* for HDIO_GETGEO */ 
+#include <linux/spinlock.h>
 
 MODULE_LICENSE("GPL");
 
@@ -17,13 +18,14 @@ module_param(blk_num, int, 0);
 static int blk_sectors_num = 128;
 module_param(blk_sectors_num, int, 0);
 
-static short blk_sector_size = 1024;
+static short blk_sector_size = 512;
 module_param(blk_sector_size, short, 0);
 
 typedef struct
 {
   int sect_size;
   int sect_num;
+  spinlock_t lock;
   struct kmem_cache* cache;
   unsigned char** sector;
   struct gendisk* disk;
@@ -78,6 +80,7 @@ static int __init blk_init(void)
 
   my_blk.sect_size = blk_sector_size;
   my_blk.sect_num = blk_sectors_num;
+  spin_lock_init(&my_blk.lock);
   
   /* if major number is 0, major number will be allocated automatically */
   blk_major = register_blkdev(blk_major, "lktmblk");
@@ -102,7 +105,7 @@ static int __init blk_init(void)
   my_blk.disk -> fops = &bdops;
   my_blk.disk -> private_data = &my_blk;
   strcpy(my_blk.disk -> disk_name, "lktmblk");
-  my_blk.disk -> queue = blk_init_queue(blk_request, NULL); /* second arg is a pointer to spinlock */
+  my_blk.disk -> queue = blk_init_queue(blk_request, /* &my_blk.lock */ NULL); /* second arg is a pointer to spinlock */
   if(NULL == my_blk.disk -> queue)
     {
       printk(KERN_DEBUG "blk: request queue allocation - fail\n");
@@ -202,7 +205,8 @@ static void blk_request(struct request_queue* q)
       //      trp = blk_xfer_bio(blk, req->bio);
 
       trp = blk_xfer_request(blk, req);
-      
+
+      //blk_complete_request(req); /* No!! */
       blk_end_request(req, 0, trp); /* second arg 0 if success > 0 if error */
       
     }while(true /* req != NULL */);
@@ -283,7 +287,7 @@ static int blk_xfer_request(blk_t* blk, struct request *req)
 		trp = blk_read(blk, sector, bio_sectors(iter.bio), buffer);
 		printk(KERN_DEBUG "blk: readen %d bytes\n", trp);
 	      }
-		
+
 	    //sector += bio_sectors(iter.bio);
 	    __bio_kunmap_atomic(iter.bio);
 	    //nsect += iter.bio->bi_size/KERNEL_SECTOR_SIZE;
@@ -400,5 +404,5 @@ static int blk_write(blk_t* blk, unsigned long sector, unsigned long nsect, char
 
 static void blk_sector_construct(void* data)
 {
-  printk(KERN_DEBUG "blk: new sector construct");
+  printk(KERN_DEBUG "blk: new sector construct\n");
 }
