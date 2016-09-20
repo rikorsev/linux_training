@@ -15,7 +15,7 @@ module_param(blk_major, int, 0);
 static int blk_num = 1;
 module_param(blk_num, int, 0);
 
-static int blk_sectors_num = 128;
+static int blk_sectors_num = 1024;
 module_param(blk_sectors_num, int, 0);
 
 static short blk_sector_size = 512;
@@ -58,6 +58,8 @@ static const struct block_device_operations bdops = {
 
 static int __init blk_init(void)
 {
+  int i;
+  
   printk(KERN_DEBUG "blk: init\n");
 
   my_blk.cache = kmem_cache_create("blk_dev_cache",  blk_sector_size, 0, 0, blk_sector_construct);
@@ -78,9 +80,26 @@ static int __init blk_init(void)
     }
   memset(my_blk.sector, 0, sizeof(unsigned char*) * blk_sector_size);
 
+ /* allocate sectors */
+  for(i = 0; i < blk_sectors_num; i++)
+    {
+      printk(KERN_DEBUG "blk: allocate new sector %d\n", i);
+      my_blk.sector[i] = kmem_cache_alloc(my_blk.cache, GFP_KERNEL);
+      if(NULL == my_blk.sector[i])
+	{
+	  printk(KERN_WARNING "blk: new sector allocation - fail\n");
+	  break;
+	}
+    }
+  
   my_blk.sect_size = blk_sector_size;
   my_blk.sect_num = blk_sectors_num;
   spin_lock_init(&my_blk.lock);
+  if(true == spin_is_locked(&my_blk.lock))
+    {
+      printk(KERN_DEBUG "blk: spin is locked... unlocking\n");
+      spin_unlock(&my_blk.lock);
+    }
   
   /* if major number is 0, major number will be allocated automatically */
   blk_major = register_blkdev(blk_major, "lktmblk");
@@ -105,7 +124,7 @@ static int __init blk_init(void)
   my_blk.disk -> fops = &bdops;
   my_blk.disk -> private_data = &my_blk;
   strcpy(my_blk.disk -> disk_name, "lktmblk");
-  my_blk.disk -> queue = blk_init_queue(blk_request, /* &my_blk.lock */ NULL); /* second arg is a pointer to spinlock */
+  my_blk.disk -> queue = blk_init_queue(blk_request, &my_blk.lock /*NULL*/); /* second arg is a pointer to spinlock */
   if(NULL == my_blk.disk -> queue)
     {
       printk(KERN_DEBUG "blk: request queue allocation - fail\n");
@@ -168,11 +187,9 @@ static void blk_request(struct request_queue* q)
   struct request* req = NULL;
   blk_t* blk = NULL;
   int trp = 0; /* amount of transported data */
-  //struct req_iterator iter;
-  
+ 
   printk(KERN_DEBUG "blk: request handler entry\n");
 
-  //while((req = elv_next_request(q)) != NULL)
   //while((req == blk_fetch_request(q)) != NULL)
   do
     {
@@ -184,121 +201,85 @@ static void blk_request(struct request_queue* q)
 	  break;
 	}
 
-      //if(false == blk_fs_request(req))
       if(REQ_TYPE_FS != req->cmd_type)
 	{
 	  printk(KERN_DEBUG "blk: not fs request\n");
-	  blk_end_request(req, 1, 0); /* second arg 0 if success > 0 if error */
+	  __blk_end_request(req, 1, 0); /* second arg 0 if success > 0 if error */
 	  continue;
 	}
-            
+
+      printk(KERN_DEBUG "blk: request is valid. handling...\n");
+      
       /* Transfer data TBD */
       blk = req -> rq_disk -> private_data;
-      /* 
-       iter.bio = req->bio;
-       
-       rq_for_each_segment(,,)
-	{
-	  
-	}
-      */
-      //      trp = blk_xfer_bio(blk, req->bio);
 
       trp = blk_xfer_request(blk, req);
 
-      //blk_complete_request(req); /* No!! */
-      blk_end_request(req, 0, trp); /* second arg 0 if success > 0 if error */
+      printk(KERN_DEBUG "blk: total transported = %d\n", trp);
+      
+      __blk_end_request(req, 0, trp); /* second arg 0 if success > 0 if error */
       
     }while(true /* req != NULL */);
   
   printk(KERN_DEBUG "blk: request handler exit\n");
 }
-/*
-static int blk_xfer_bio(blk_t* blk, struct bio* bio)
-{
-  int i;
-  struct bio_vec* bvec;
-  sector_t sector = bio->bi_sector;
-  char* buffer = NULL;
-  int trp = 0;
-  
-  printk(KERN_DEBUG "blk: bio handling\n");
-  
-  bio_for_each_segment(bvec, bio, i)
-    {
-      //printk(KERN_DEBUG "blk: bio: bvec_iter: sector %d, size %d, index %d, done %d\n");
-      
-      buffer = __bio_kmap_atomic(bio, i, KM_USER0);
-
-      if(WRITE == bio_data_dir(bio))
-	{
-	  trp = blk_write(blk, sector, bio_cur_sectors(bio), buffer);
-	  printk(KERN_DEBUG "blk: written %d bytes\n", trp);
-	}
-      else
-	{
-	  trp = blk_read(blk, sector, bio_cur_sectors(bio), buffer);
-	  printk(KERN_DEBUG "blk: readen %d bytes\n", trp);	  
-	}
-      
-      sector += bio_cur_sectors(bio);
-      __bio_kunmap_atomic(bio, KM_USER0);
-    }
-  
-  return trp;
-}
-*/
 
 static int blk_xfer_request(blk_t* blk, struct request *req)
 {
 
 	struct req_iterator iter;
-	//int nsect = 0;
 	struct bio_vec bvec;
 	char* buffer = NULL;
-	sector_t sector = 0;//iter.bio->bi_iter.sector;
+	sector_t sector = 0;
 	int trp = 0;
+	int trp_total = 0;
 	
 	/* Macro rq_for_each_bio is gone.
 	 * In most cases one should use rq_for_each_segment.
 	 */
+	//sector = iter.bio -> bi_iter.bi_sector;
+	
 	rq_for_each_segment(bvec, req, iter)
 	  {
 	    sector = iter.bio -> bi_iter.bi_sector;
 	    buffer = __bio_kmap_atomic(iter.bio, iter.iter);
 
-	    /*sbull_transfer(dev, sector, bio_cur_sectors(iter.bio),
-	      buffer, bio_data_dir(iter.bio) == WRITE);
-	    */
+	    printk(KERN_DEBUG "blk: buffer 0x%p", buffer);
 
 	    printk(KERN_DEBUG "blk: bio: bvec_iter: sector %d, size %d, index %d, done %d\n", \
-		   (int)iter.bio -> bi_iter.bi_sector,			\
-		   iter.bio -> bi_iter.bi_size, \
-		   iter.bio -> bi_iter.bi_idx, \
-		   iter.bio -> bi_iter.bi_bvec_done);
-		
+	    	   (int)iter.bio -> bi_iter.bi_sector,			\
+	    	   iter.bio -> bi_iter.bi_size, \
+	    	   iter.bio -> bi_iter.bi_idx, \
+	    	   iter.bio -> bi_iter.bi_bvec_done);
+	    
+	    printk(KERN_DEBUG "blk: bio: page 0x%p, len %d, offset %d\n", \
+		   bio_page(iter.bio), \
+		   bio_iter_len(iter.bio, iter.bio -> bi_iter), \
+		   bio_offset(iter.bio));
+	    
 	    if(WRITE == bio_data_dir(iter.bio))
 	      {
-		trp = blk_write(blk, sector, bio_sectors(iter.bio), buffer);
-		printk(KERN_DEBUG "blk: written %d bytes\n", trp);
+	    	trp = blk_write(blk, sector, bio_sectors(iter.bio), buffer);
+	    	printk(KERN_DEBUG "blk: written %d bytes\n", trp);
 	      }
 	    else
 	      {
-		trp = blk_read(blk, sector, bio_sectors(iter.bio), buffer);
-		printk(KERN_DEBUG "blk: readen %d bytes\n", trp);
+	    	trp = blk_read(blk, sector, bio_sectors(iter.bio), buffer);
+	    	printk(KERN_DEBUG "blk: readen %d bytes\n", trp);
 	      }
 
-	    //sector += bio_sectors(iter.bio);
 	    __bio_kunmap_atomic(iter.bio);
-	    //nsect += iter.bio->bi_size/KERNEL_SECTOR_SIZE;
+	    
+	    //	    sector += trp / 512;
+	    trp_total += trp;
+
 	  }
-	return trp;//nsect;
+	return trp_total;
 }
 
 
 static int blk_ioctl_handler(struct block_device* dev, fmode_t mode, unsigned int cmd, unsigned long data)
 {
-  //long size;
   struct hd_geometry geo;
   blk_t* blk = dev->bd_disk->private_data;
   int status = 0;
@@ -356,7 +337,7 @@ static int blk_read(blk_t* blk, unsigned long sector, unsigned long nsect, char*
   for(i = 0; i < nsect && sector < blk->sect_num; i++, sector++)
     {
       printk(KERN_DEBUG "blk: read: sector %d\n", (int)sector);
-
+      /*
       if(NULL == blk->sector[sector])
 	{
 	  printk(KERN_DEBUG "blk: sector %d is empty\n", (int)sector);
@@ -364,6 +345,7 @@ static int blk_read(blk_t* blk, unsigned long sector, unsigned long nsect, char*
 	  //nsect--;
 	  continue;
 	}
+      */
       memcpy(buf + blk->sect_size * i, blk->sector[sector], blk->sect_size);
     }
   
@@ -383,7 +365,7 @@ static int blk_write(blk_t* blk, unsigned long sector, unsigned long nsect, char
   for(i = 0; i < nsect && sector < blk->sect_num; i++, sector++)
     {
       printk(KERN_DEBUG "blk: write: sector %d\n", (int)sector);
-
+      /*
       if(NULL == blk->sector[sector])
 	{
 	  printk(KERN_DEBUG "blk: allocate new sector %d\n", (int)sector);
@@ -396,10 +378,11 @@ static int blk_write(blk_t* blk, unsigned long sector, unsigned long nsect, char
 	      continue;
 	    }
 	}
+      */
       memcpy(blk->sector[sector], buf + i * blk->sect_size, blk->sect_size);
     }
   
-  return blk->sect_num * i;
+  return blk->sect_size * i;
 }
 
 static void blk_sector_construct(void* data)
