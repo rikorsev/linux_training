@@ -238,25 +238,38 @@ static int blk_xfer_request(blk_t* blk, struct request *req)
 	 * In most cases one should use rq_for_each_segment.
 	 */
 	//sector = iter.bio -> bi_iter.bi_sector;
+
+	//iter.bio = req -> bio;
 	
 	rq_for_each_segment(bvec, req, iter)
 	  {
-	    sector = iter.bio -> bi_iter.bi_sector;
+	    //sector = iter.bio -> bi_iter.bi_sector;
+	    sector = iter.iter.bi_sector;
 	    buffer = __bio_kmap_atomic(iter.bio, iter.iter);
 
-	    printk(KERN_DEBUG "blk: buffer 0x%p", buffer);
+	    printk(KERN_DEBUG "blk: bio 0x%p, next bio 0x%p\n", iter.bio, iter.bio -> bi_next);
+	    
+	    printk(KERN_DEBUG "blk: buffer 0x%p\n", buffer);
 
 	    printk(KERN_DEBUG "blk: bio: bvec_iter: sector %d, size %d, index %d, done %d\n", \
-	    	   (int)iter.bio -> bi_iter.bi_sector,			\
-	    	   iter.bio -> bi_iter.bi_size, \
-	    	   iter.bio -> bi_iter.bi_idx, \
-	    	   iter.bio -> bi_iter.bi_bvec_done);
-	    
+		   /* (int)iter.bio -> bi_iter.bi_sector,		\
+	    	   iter.bio -> bi_iter.bi_size,			\
+	    	   iter.bio -> bi_iter.bi_idx,			\
+	    	   iter.bio -> bi_iter.bi_bvec_done);*/
+		   (int)iter.iter.bi_sector,	\
+		   iter.iter.bi_size,		\
+		   iter.iter.bi_idx,		\
+		   iter.iter.bi_bvec_done);
+		   
 	    printk(KERN_DEBUG "blk: bio: page 0x%p, len %d, offset %d\n", \
-		   bio_page(iter.bio), \
-		   bio_iter_len(iter.bio, iter.bio -> bi_iter), \
+		   /*bio_page(iter.bio),				\
+		   bio_iter_len(iter.bio, iter.bio -> bi_iter),	\
 		   bio_offset(iter.bio));
-	    
+		   */
+		   bio_vec.bv_page,		\
+		   bio_vec.bv_len,		\
+		   bio_vec.bv_offase));
+		   
 	    if(WRITE == bio_data_dir(iter.bio))
 	      {
 	    	trp = blk_write(blk, sector, bio_sectors(iter.bio), buffer);
@@ -270,7 +283,6 @@ static int blk_xfer_request(blk_t* blk, struct request *req)
 
 	    __bio_kunmap_atomic(iter.bio);
 	    
-	    //	    sector += trp / 512;
 	    trp_total += trp;
 
 	  }
@@ -323,10 +335,12 @@ static void blk_close(struct gendisk* disk, fmode_t mode)
   printk(KERN_DEBUG "blk: close\n");
 }
 
-static int blk_read(blk_t* blk, unsigned long sector, unsigned long nsect, char* buf)
+static int blk_read(blk_t* blk, unsigned long sector, char* buf, unsigned long size)
 {
   int i;
-
+  int total_writen = 0;
+  int write_len = 0;
+  
   if (NULL == buf)
     {
       printk(KERN_WARNING "blk: attempt to read to NULL pointer\n");
@@ -346,13 +360,16 @@ static int blk_read(blk_t* blk, unsigned long sector, unsigned long nsect, char*
 	  continue;
 	}
       */
-      memcpy(buf + blk->sect_size * i, blk->sector[sector], blk->sect_size);
+      write_len = size > blk->sect_size ? blk->sect_size : size;
+      
+      memcpy(buf + blk->sect_size * i, blk->sector[sector], write_len);
+      
     }
   
   return blk->sect_size * i;
 }
 
-static int blk_write(blk_t* blk, unsigned long sector, unsigned long nsect, char* buf)
+static int blk_write(blk_t* blk, unsigned long sector, char* buf, unsigned long size)
 {
   int i;
   
