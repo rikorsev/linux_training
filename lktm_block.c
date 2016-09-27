@@ -41,8 +41,8 @@ static void blk_sector_construct(void* data);
 //static int blk_xfer_bio(blk_t *blk, struct bio *bio);
 static int blk_xfer_request(blk_t* blk, struct request *req);
 
-static int blk_read(blk_t* blk, unsigned long sector, unsigned long nsect, char* buf);
-static int blk_write(blk_t* blk, unsigned long sector, unsigned long nsect, char* buf);
+static int blk_read(blk_t* blk, unsigned long sector, char* buf, unsigned long size);
+static int blk_write(blk_t* blk, unsigned long sector, char* buf, unsigned long size);
 
 /* device operations prototype */
 static int blk_open(struct block_device* dev, fmode_t mode);
@@ -266,18 +266,18 @@ static int blk_xfer_request(blk_t* blk, struct request *req)
 		   bio_iter_len(iter.bio, iter.bio -> bi_iter),	\
 		   bio_offset(iter.bio));
 		   */
-		   bio_vec.bv_page,		\
-		   bio_vec.bv_len,		\
-		   bio_vec.bv_offase));
-		   
+		   bvec.bv_page,		\
+		   bvec.bv_len,		\
+		   bvec.bv_offset);
+	    
 	    if(WRITE == bio_data_dir(iter.bio))
 	      {
-	    	trp = blk_write(blk, sector, bio_sectors(iter.bio), buffer);
+	    	trp = blk_write(blk, sector, buffer, bvec.bv_len/*4096*/);
 	    	printk(KERN_DEBUG "blk: written %d bytes\n", trp);
 	      }
 	    else
 	      {
-	    	trp = blk_read(blk, sector, bio_sectors(iter.bio), buffer);
+	    	trp = blk_read(blk, sector, buffer, bvec.bv_len/*4096*/);
 	    	printk(KERN_DEBUG "blk: readen %d bytes\n", trp);
 	      }
 
@@ -338,32 +338,27 @@ static void blk_close(struct gendisk* disk, fmode_t mode)
 static int blk_read(blk_t* blk, unsigned long sector, char* buf, unsigned long size)
 {
   int i;
-  int total_writen = 0;
-  int write_len = 0;
+  int num_of_sect = 0;
   
-  if (NULL == buf)
+  if (NULL == buf || 0 == size)
     {
-      printk(KERN_WARNING "blk: attempt to read to NULL pointer\n");
+      printk(KERN_DEBUG "blk: attrmpt to read to NULL pointer of buffer lenght is zero\n");
       return 0;
-
     }
+
+  num_of_sect = size < blk->sect_size ? 1 : size / blk->sect_size;
   
-  for(i = 0; i < nsect && sector < blk->sect_num; i++, sector++)
+  for(i = 0; i < num_of_sect && sector < blk->sect_num; i++, sector++)
     {
       printk(KERN_DEBUG "blk: read: sector %d\n", (int)sector);
-      /*
+
       if(NULL == blk->sector[sector])
 	{
 	  printk(KERN_DEBUG "blk: sector %d is empty\n", (int)sector);
-	  //i--;
-	  //nsect--;
 	  continue;
 	}
-      */
-      write_len = size > blk->sect_size ? blk->sect_size : size;
       
-      memcpy(buf + blk->sect_size * i, blk->sector[sector], write_len);
-      
+      memcpy(buf + blk->sect_size * i, blk->sector[sector], blk->sect_size);
     }
   
   return blk->sect_size * i;
@@ -372,17 +367,20 @@ static int blk_read(blk_t* blk, unsigned long sector, char* buf, unsigned long s
 static int blk_write(blk_t* blk, unsigned long sector, char* buf, unsigned long size)
 {
   int i;
+  int num_of_sect = 0;
   
-  if (NULL == buf)
+  if (NULL == buf || 0 == size)
     {
-      printk(KERN_DEBUG "blk: attrmpt to write from NULL pointer\n");
+      printk(KERN_DEBUG "blk: attrmpt to write from NULL pointer of buffer lenght is zero\n");
       return 0;
     }
 
-  for(i = 0; i < nsect && sector < blk->sect_num; i++, sector++)
+  num_of_sect = size < blk->sect_size ? 1 : size / blk->sect_size;
+  
+  for(i = 0; i < num_of_sect && sector < blk->sect_num; i++, sector++)
     {
       printk(KERN_DEBUG "blk: write: sector %d\n", (int)sector);
-      /*
+      
       if(NULL == blk->sector[sector])
 	{
 	  printk(KERN_DEBUG "blk: allocate new sector %d\n", (int)sector);
@@ -391,11 +389,11 @@ static int blk_write(blk_t* blk, unsigned long sector, char* buf, unsigned long 
 	    {
 	      printk(KERN_DEBUG "blk: new sector allocation - fail\n");
 	      i--;
-	      nsect--;
+	      num_of_sect--;
 	      continue;
 	    }
 	}
-      */
+      
       memcpy(blk->sector[sector], buf + i * blk->sect_size, blk->sect_size);
     }
   
