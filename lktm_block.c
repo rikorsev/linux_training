@@ -41,18 +41,20 @@ static void blk_sector_construct(void* data);
 //static int blk_xfer_bio(blk_t *blk, struct bio *bio);
 static int blk_xfer_request(blk_t* blk, struct request *req);
 
-static int blk_read(blk_t* blk, unsigned long sector, char* buf, unsigned long size);
-static int blk_write(blk_t* blk, unsigned long sector, char* buf, unsigned long size);
-
 /* device operations prototype */
 static int blk_open(struct block_device* dev, fmode_t mode);
 static void blk_close(struct gendisk* disk, fmode_t mode);
 static int blk_ioctl_handler(struct block_device* dev, fmode_t mode, unsigned int cmd, unsigned long data);
+static int blk_getgeo(struct block_device* dev, struct hd_geometry* geo);
+static int blk_read(blk_t* blk, unsigned long sector, char* buf, unsigned long size);
+static int blk_write(blk_t* blk, unsigned long sector, char* buf, unsigned long size);
+
 
 static const struct block_device_operations bdops = {
   .owner = THIS_MODULE,
   .open = blk_open,
   .release = blk_close,
+  .getgeo = blk_getgeo,
   .ioctl = blk_ioctl_handler
 };
 
@@ -237,13 +239,9 @@ static int blk_xfer_request(blk_t* blk, struct request *req)
 	/* Macro rq_for_each_bio is gone.
 	 * In most cases one should use rq_for_each_segment.
 	 */
-	//sector = iter.bio -> bi_iter.bi_sector;
-
-	//iter.bio = req -> bio;
 	
 	rq_for_each_segment(bvec, req, iter)
 	  {
-	    //sector = iter.bio -> bi_iter.bi_sector;
 	    sector = iter.iter.bi_sector;
 	    buffer = __bio_kmap_atomic(iter.bio, iter.iter);
 
@@ -252,21 +250,13 @@ static int blk_xfer_request(blk_t* blk, struct request *req)
 	    printk(KERN_DEBUG "blk: buffer 0x%p\n", buffer);
 
 	    printk(KERN_DEBUG "blk: bio: bvec_iter: sector %d, size %d, index %d, done %d\n", \
-		   /* (int)iter.bio -> bi_iter.bi_sector,		\
-	    	   iter.bio -> bi_iter.bi_size,			\
-	    	   iter.bio -> bi_iter.bi_idx,			\
-	    	   iter.bio -> bi_iter.bi_bvec_done);*/
-		   (int)iter.iter.bi_sector,	\
+		   (int)iter.iter.bi_sector,				\
 		   iter.iter.bi_size,		\
 		   iter.iter.bi_idx,		\
 		   iter.iter.bi_bvec_done);
 		   
 	    printk(KERN_DEBUG "blk: bio: page 0x%p, len %d, offset %d\n", \
-		   /*bio_page(iter.bio),				\
-		   bio_iter_len(iter.bio, iter.bio -> bi_iter),	\
-		   bio_offset(iter.bio));
-		   */
-		   bvec.bv_page,		\
+		   bvec.bv_page,					\
 		   bvec.bv_len,		\
 		   bvec.bv_offset);
 	    
@@ -399,6 +389,27 @@ static int blk_write(blk_t* blk, unsigned long sector, char* buf, unsigned long 
   
   return blk->sect_size * i;
 }
+
+static int blk_getgeo(struct block_device* dev, struct hd_geometry* geo)
+{
+  blk_t* blk = dev->bd_disk->private_data;
+  
+  printk(KERN_DEBUG "blk: get geo\n");
+
+  if(NULL == dev || NULL == geo)
+    {
+      printk(KERN_DEBUG"blk: get geo - fail. null pointer\n");
+      return -1;
+    }
+
+  geo->cylinders = 1;
+  geo->heads = 1;
+  geo->sectors = blk->sect_num;
+  geo->start = 0;
+  
+  return 0;
+}
+
 
 static void blk_sector_construct(void* data)
 {
