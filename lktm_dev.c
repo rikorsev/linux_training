@@ -40,6 +40,7 @@ extern unsigned short vled_get_pwm(void);
 
 typedef struct
 {
+  //  struct kobject* kobj;
   char* buff;
   size_t sz;
   struct cdev cdev;
@@ -65,12 +66,6 @@ static int __init dev_init(void)
   dev_register_num();
   dev_register_cdev();
 
-  //vled_set_state(true);
-  //vled_set_pwm(255);
-  
-  //printk(KERN_DEBUG "dev: current vled state is %s\n", true == vled_get_state() ? "on" : "off");
-  //printk(KERN_DEBUG "dev: current vled pwm is %d\n", vled_get_pwm());
-  
   return 0;
 }
 module_init(dev_init);

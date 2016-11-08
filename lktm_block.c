@@ -63,7 +63,7 @@ static int __init blk_init(void)
   int i;
   
   printk(KERN_DEBUG "blk: init\n");
-
+  
   my_blk.cache = kmem_cache_create("blk_dev_cache",  blk_sector_size, 0, 0, blk_sector_construct);
 
   if (NULL == my_blk.cache)
