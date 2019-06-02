@@ -2,12 +2,12 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>          /* contains a lot of useful things such as file_operations structure prototypes of function to register/allocate device number etc.*/
-#include <asm/uaccess.h>       /* to access to user space*/
+#include <linux/uaccess.h>       /* to access to user space*/
 #include <linux/moduleparam.h> /* header for manage params of module*/
 #include <linux/cdev.h>        /* contains cdev struct and functions to work with it*/
 #include <linux/slab.h>        /* for kalloc function */
 
-MODULE_AUTHOR("Oleksandr Kolosov")
+MODULE_AUTHOR("Oleksandr Kolosov");
 MODULE_LICENSE("GPL");
 
 /* default device number */
@@ -89,7 +89,7 @@ static int dev_register_cdev(int major, int num)
     cdev_init(&device[i].cdev, &dev_fops);
       
     /* add character device to the system */
-    result = cdev_add(&device[i].cdev, devno, 1)
+    result = cdev_add(&device[i].cdev, devno, 1);
     if(result < 0)
     {
       printk(KERN_WARNING "dev: device %d-%d - adding fail\n", major, i);
@@ -125,9 +125,11 @@ module_init(dev_init);
 
 static void __exit dev_exit(void)
 {
+  int i;
+
   printk(KERN_DEBUG "dev: clenup\n");
 
-  for(int i = 0; i < dev_num; i++)
+  for(i = 0; i < dev_num; i++)
   {
     /* Delete character device form system */
     cdev_del(&device[i].cdev);
