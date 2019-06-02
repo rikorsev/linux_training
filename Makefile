@@ -19,8 +19,10 @@ lktm_mem_alloc_pages.o \
 lktm_dev.o \
 lktm_vled.o \
 lktm_sysfs.o \
-lktm_block.o \
 lktm_char_dev.o
+
+# Excluded from buidl for a while
+#lktm_block.o \
 
 MY_CFLAGS += -g -DDEBUG
 ccflags += ${MY_CFLAGS}
@@ -35,4 +37,4 @@ clean: clean_emacs_tmp
 clean_all: clean
 	rm -rf $(obj-m:.o=.ko) modules.order Module.symvers
 clean_emacs_tmp:
-	rm -rf *~ .cmd$
+	rm -rf *~

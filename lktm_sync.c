@@ -7,6 +7,7 @@
 #include <linux/fs.h> /* for file_operations */
 #include <linux/proc_fs.h> /* for adding files to /proc */
 #include <linux/slab.h> /* for kmalloc */
+#include <linux/uaccess.h> /* to access to user space*/
 
 MODULE_LICENSE("GPL");
 
@@ -22,12 +23,13 @@ static const struct file_operations proc_fops =
     .read = proc_read
   };
 
-static void tasklet_run_timer_handler(unsigned long val);
+
+static void tasklet_run_timer_handler(struct timer_list *);
 
 static int timer_var = 0;
 static int tasklet_var = 0;
 static struct timer_list inc_timer;
-static struct timer_list tasklet_run_timer = TIMER_INITIALIZER(tasklet_run_timer_handler, 0, 0);
+DEFINE_TIMER(tasklet_run_timer, tasklet_run_timer_handler);
 static struct tasklet_struct some_tasklet;
 
 static struct proc_dir_entry* proc_dir_entry;
@@ -70,16 +72,14 @@ static ssize_t proc_read(struct file* f, char* __user buff, size_t sz, loff_t* o
     }
 }
 
-static void inc_timer_handler(unsigned long val_ptr)
+static void inc_timer_handler(struct timer_list *timer)
 {
-  (*(int*)val_ptr)++;
-  
-  printk(KERN_DEBUG "sync: timer inc %d\n", (*(int*)val_ptr));
+  printk(KERN_DEBUG "sync: timer inc\n");
 
-  mod_timer(&inc_timer, jiffies + msecs_to_jiffies(1000));
+  mod_timer(timer, jiffies + msecs_to_jiffies(1000));
 }
 
-static void tasklet_run_timer_handler(unsigned long val)
+static void tasklet_run_timer_handler(struct timer_list *timer)
 {
   printk(KERN_DEBUG "sync: tasklet schaduled\n");
 
@@ -115,9 +115,9 @@ static int sync_init(void)
   
   inc_timer.expires = jiffies + msecs_to_jiffies(1000);
   inc_timer.function = inc_timer_handler;
-  inc_timer.data = (unsigned long)(&timer_var);
+  //inc_timer.data = (unsigned long)(&timer_var);
 
-  init_timer(&inc_timer);
+  //init_timer(&inc_timer);
   tasklet_run_timer.expires = jiffies + msecs_to_jiffies(2000);
   
   add_timer(&inc_timer);

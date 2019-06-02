@@ -5,7 +5,7 @@
 #include <linux/fs.h> /*contains a lot of useful things such as file_operations structure 
 prototypes of function to register/allocate device number etc.*/
 #include <linux/cdev.h> /*contains cdev struct and functions to work with it*/
-#include <asm/uaccess.h> /* to access to user space*/
+#include <linux/uaccess.h> /* to access to user space*/
 #include <linux/slab.h> /* for kalloc function */
 #include <linux/semaphore.h> /* for down_interruptable ant up functions */
 

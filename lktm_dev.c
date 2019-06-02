@@ -2,7 +2,7 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
-#include <asm/uaccess.h> /* to access to user space*/
+#include <linux/uaccess.h> /* to access to user space*/
 #include <linux/moduleparam.h> /*header for manage params of module*/
 #include <linux/cdev.h> /*contains cdev struct and functions to work with it*/
 #include <linux/slab.h>

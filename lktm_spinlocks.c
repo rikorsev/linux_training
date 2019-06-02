@@ -12,7 +12,7 @@ static struct task_struct* th_a = NULL;
 static struct task_struct* th_b = NULL;
 static struct timer_list tim;
 
-static void tim_handler(unsigned long data)
+static void tim_handler(struct timer_list *timer)
 {
   printk(KERN_DEBUG "slock: timer handler entery\n");
 }
@@ -29,7 +29,6 @@ static int th_a_entery(void* data)
       
       tim.expires = jiffies + msecs_to_jiffies(100);
       tim.function = tim_handler;
-      tim.data = 0;
       add_timer(&tim);
       printk(KERN_DEBUG "slock: tim go!\n");
       
