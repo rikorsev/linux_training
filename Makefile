@@ -19,7 +19,8 @@ lktm_mem_alloc_pages.o \
 lktm_dev.o \
 lktm_vled.o \
 lktm_sysfs.o \
-lktm_char_dev.o
+lktm_char_dev.o \
+lktm_kobj.o
 
 # Excluded from buidl for a while
 #lktm_block.o \
