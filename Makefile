@@ -30,9 +30,9 @@ ccflags += ${MY_CFLAGS}
 cc += ${MY_CFLAGS}
 
 all:
-	$(MAKE) -C $(KERNEL_SOURCE) SUBDIRS=$(CURDIR) modules
+	$(MAKE) -C $(KERNEL_SOURCE) M=$(CURDIR) modules
 debug:
-	$(MAKE) -C $(KERNEL_SOURCE) SUBDIRS=$(CURDIR) modules EXTRA_CFLAGS="$(MY_CFLAGS)"
+	$(MAKE) -C $(KERNEL_SOURCE) M=$(CURDIR) modules EXTRA_CFLAGS="$(MY_CFLAGS)"
 clean: clean_emacs_tmp
 	rm -rf $(obj-m) $(obj-m:.o=.mod.c) $(obj-m:.o=.mod.o)
 clean_all: clean
