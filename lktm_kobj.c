@@ -7,12 +7,59 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Oleksandr Kolosov");
 
+static ssize_t ref_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf);
+static ssize_t lktm_value_show(struct kobject *kobj, struct attribute *attr, char *buf);
+static ssize_t lktm_value_store(struct kobject *kobj, struct attribute *attr, const char *buf, size_t count);
+static void    lktm_release(struct kobject *kobj);
+static ssize_t lktm_kobj_create_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf);
+static ssize_t lktm_kobj_create_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count);
+
 /* define structure for our root object */
 struct lktm_kobj
 {
   struct kobject        kobj;  // kernel object structure
   u32                   data;  // state variable
 };
+
+/* define state attribute */
+static struct attribute lktm_value_attr = {
+  .name = "value",
+  .mode = S_IRUSR | S_IWUSR
+};
+
+/* it is the array for default attributes */
+static struct attribute *lktm_def_attrs[] = {
+  &lktm_value_attr,
+  NULL
+};
+
+/* define sysfs operations for ktype */
+static struct sysfs_ops lktm_def_ops = {
+  .show          = lktm_value_show,
+  .store         = lktm_value_store
+};
+
+/* define ktype for lktm_obj */
+static struct kobj_type lktm_ktype = {
+  .release       = lktm_release,
+  .sysfs_ops     = &lktm_def_ops,
+  .default_attrs = lktm_def_attrs
+};
+
+static struct kobj_attribute create = __ATTR(create, S_IRUSR | S_IWUSR, lktm_kobj_create_show, lktm_kobj_create_store);
+static struct kobj_attribute ref    = __ATTR_RO(ref);
+
+/* define lktm root object */
+static struct kset *parent_kset = NULL;
+
+/* this function shows current state of lktm_root object */
+static ssize_t ref_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+  int refcount = kref_read(&kobj->kref);
+  printk(KERN_DEBUG "lktm: obj: show reference coint\n");
+  printk(KERN_DEBUG "lktm: obj: refcount = %d\n", refcount);
+  return sprintf(buf, "%u\n", refcount);
+}
 
 /* this function shows current state of lktm_root object */
 static ssize_t lktm_value_show(struct kobject *kobj, struct attribute *attr, char *buf)
@@ -41,37 +88,11 @@ static void lktm_release(struct kobject *kobj)
   struct lktm_kobj *child = container_of(kobj, struct lktm_kobj, kobj);
 
   printk(KERN_DEBUG "lktm: obj: release %s\n", kobject_name(kobj));
-
+  
+  // sysfs_remove_file(kobj, &ref.attr);
+  
   kfree(child);
 }
-
-/* define state attribute */
-static struct attribute lktm_def_attr = {
-  .name = "value",
-  .mode = S_IRUSR | S_IWUSR
-};
-
-/* it is the array for default attributes */
-static struct attribute *lktm_def_attrs[] = {
-  &lktm_def_attr,
-  NULL
-};
-
-/* define sysfs operations for ktype */
-static struct sysfs_ops lktm_def_ops = {
-  .show = lktm_value_show,
-  .store = lktm_value_store
-};
-
-/* define ktype for lktm_obj */
-static struct kobj_type lktm_ktype = {
-  .release = lktm_release,
-  .sysfs_ops = &lktm_def_ops,
-  .default_attrs = lktm_def_attrs
-};
-
-/* define lktm root object */
-static struct kset *parent_kset = NULL;
 
 /* create new object */
 static void lktm_create(u8 index)
@@ -94,6 +115,13 @@ static void lktm_create(u8 index)
     printk(KERN_WARNING "lktm: obj: kobject init and add - fail. Result %d\n", result);
     kfree(child);
   }
+
+  // if(0!= sysfs_create_file(&child->kobj, &ref.attr))
+  // {
+  //   printk(KERN_WARNING "lktm: obj: create ref attribute - fail");
+  //   kobject_del(&child->kobj);
+  //   kfree(child);
+  // }
 }
 
 static void lktm_del_all(void)
@@ -143,8 +171,6 @@ static ssize_t lktm_kobj_create_store(struct kobject *kobj, struct kobj_attribut
   return count;
 }
 
-static struct kobj_attribute create = __ATTR(create, S_IRUSR | S_IWUSR, lktm_kobj_create_show, lktm_kobj_create_store);
-
 /* init module */
 static int __init lktm_obj_init(void)
 {
@@ -168,7 +194,7 @@ static int __init lktm_obj_init(void)
 clean_kset:
   kset_unregister(parent_kset);
 
-  return result;
+  return -1;
 }
 module_init(lktm_obj_init);
 
