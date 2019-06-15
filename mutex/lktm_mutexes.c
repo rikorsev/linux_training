@@ -8,6 +8,8 @@ static struct mutex mtx;
 static struct task_struct* th_a;
 static struct task_struct* th_b;
 
+MODULE_LICENSE("GPL");
+
 static int th_a_entery(void* data)
 {
   printk(KERN_DEBUG "mtx: thread A started\n");
@@ -44,7 +46,7 @@ static int th_b_entery(void* data)
 	  printk(KERN_DEBUG "mtx: thread B: try lock - fail\n");
 	}
       msleep(1000);
-    }	
+    }
 
   printk(KERN_DEBUG "mtx: thread B exit\n");
   return 0;

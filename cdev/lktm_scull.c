@@ -19,8 +19,6 @@ long scull_ioctl(/*struct inode* node, */struct file* f, unsigned int i_num, uns
 int scull_open(struct inode* node, struct file* f);
 int scull_release(struct inode* node, struct file* f);
 
-static void __exit scull_cleanup(void);
-
 struct file_operations scull_fops = {
     .owner = THIS_MODULE,
     .llseek = scull_llseek,
@@ -77,6 +75,22 @@ static void scull_setup_cdev(struct scull_dev *dev, int index)
     }
 }
 
+static void scull_cleanup(void)
+{
+  int index;
+  
+  printk(KERN_DEBUG "scull: cleneup\n");
+  
+  if(scull_dev_set_ptr != NULL)
+  {
+    for(index = 0; index < scull_nr_devs; index++)
+  {
+    if(scull_dev_set_ptr[index] != NULL) kfree(scull_dev_set_ptr[index]);
+  }
+    kfree(scull_dev_set_ptr);
+  }
+}
+
 static int __init scull_init(void)
 {
   int index;
@@ -126,25 +140,15 @@ static int __init scull_init(void)
 
   return result;
 }
-
-static void __exit scull_cleanup(void)
-{
-  int index;
-  
-  printk(KERN_DEBUG "scull: cleneup\n");
-  
-  if(scull_dev_set_ptr != NULL)
-    {
-      for(index = 0; index < scull_nr_devs; index++)
-	{
-	  if(scull_dev_set_ptr[index] != NULL) kfree(scull_dev_set_ptr[index]);
-	}
-      kfree(scull_dev_set_ptr);
-    }
-}
-
 module_init(scull_init);
-module_exit(scull_cleanup);
+
+static void __exit scull_exit(void)
+{
+	scull_cleanup();
+
+	printk(KERN_DEBUG "scull: exit");
+}
+module_exit(scull_exit);
 
 loff_t scull_llseek(struct file* f, loff_t offset, int val)
 {

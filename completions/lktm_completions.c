@@ -19,8 +19,6 @@ static struct task_struct* th_waiter_b = NULL;
 static struct task_struct* th_waiter_c = NULL;
 static struct task_struct* th_initializer = NULL;
 
-static void __exit compl_clenup(void);
-
 static int compl_th_initializer_entery(void* data)
 {
   int i;
@@ -155,6 +153,18 @@ static int compl_th_waiter_c_entery(void* data)
   return 0;
 }
 
+static void compl_clenup(void)
+{
+  printk(KERN_DEBUG "compl: clenup\n");
+
+  if( NULL != th_waiter_a) 
+  {
+    printk(KERN_DEBUG "compl: waiter A: cleanup started...\n");
+    kthread_stop(th_waiter_a);
+    printk(KERN_DEBUG "compl: waiter A: completed\n");
+  }
+}
+
 static int __init compl_init(void)
 {
   printk(KERN_DEBUG "compl: init\n");
@@ -180,38 +190,10 @@ static int __init compl_init(void)
 }
 module_init(compl_init);
 
-static void __exit compl_clenup(void)
+static void __exit compl_exit(void)
 {
-  printk(KERN_DEBUG "compl: clenup\n");
+  compl_clenup();
 
-if( NULL != th_waiter_a) 
-    {
-      printk(KERN_DEBUG "compl: waiter A: cleanup started...\n");
-      kthread_stop(th_waiter_a);
-      //wait_for_completion(&compl_waiter_a);
-      printk(KERN_DEBUG "compl: waiter A: completed\n");
-    }
-/*
-  if( NULL != th_waiter_b) 
-    {
-      printk(KERN_DEBUG "compl: waiter B: cleanup started...\n");
-      //complete_all(&compl_waiter_a);
-      //complete_all(&compl_b);
-      kthread_stop(th_waiter_b);
-      //wait_for_completion(&compl_waiter_b);
-
-      printk(KERN_DEBUG "compl: waiter B: completed\n");
-    }
-
-  if( NULL != th_waiter_c)
-    {
-      printk(KERN_DEBUG "compl: waiter C: cleanup started...\n");
-      //complete(&compl_waiter_a);
-      //complete(&compl_b);
-      kthread_stop(th_waiter_c);
-      //wait_for_completion(&compl_waiter_c);
-      printk(KERN_DEBUG "compl: waiter C: completed\n");  
-    }
-*/
+  printk(KERN_DEBUG "compl: exit\n");
 }
-module_exit(compl_clenup);
+module_exit(compl_exit);
