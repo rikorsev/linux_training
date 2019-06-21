@@ -27,20 +27,23 @@ static int     dev_open   (struct inode* node, struct file* f);
 static int     dev_release(struct inode* node, struct file* f);
 static ssize_t dev_read   (struct file* f, char __user* user_buff, size_t size, loff_t* loff);
 static ssize_t dev_write  (struct file* f, const char __user* user_buff, size_t size, loff_t* loff);
+static long dev_ioctl(struct file * f, unsigned int cmd, unsigned long arg);
 
 static struct file_operations dev_fops = {
-  .owner   = THIS_MODULE,
-  .open    = dev_open,
-  .release = dev_release,
-  .read    = dev_read,
-  .write   = dev_write,
+  .owner          = THIS_MODULE,
+  .open           = dev_open,
+  .release        = dev_release,
+  .read           = dev_read,
+  .write          = dev_write,
+  .unlocked_ioctl = dev_ioctl
 };
 
 struct lkt_cdev
 {
-  char* buff;
+  char*  buff;
   size_t sz;
   struct cdev cdev;
+  u32    value;
 };
 
 /* pointer to cdev structure */
@@ -215,6 +218,7 @@ static int dev_open(struct inode* node, struct file* f)
 {
   printk(KERN_DEBUG "dev: open\n");
 
+  /* put pointer to our lkt_cdev structure in privat data of file */
   f->private_data = container_of(node->i_cdev, struct lkt_cdev, cdev);
 
   return 0; /* success */
@@ -265,4 +269,88 @@ static ssize_t dev_write(struct file* f, const char __user* user_buff, size_t si
   dev->sz = size;
 
   return size;
+}
+
+
+struct lktm_cdev_xfer
+{
+  u8 *buffer;
+  u32 size;
+};
+
+#define LKTM_CDEV_IOCTL_MAGIC 0xF7
+
+#define LKTM_CDEV_IOCTL_DO_NOTHING   _IO(LKTM_CDEV_IOCTL_MAGIC,   0)
+#define LKTM_CDEV_IOCTL_READ_MAGIC   _IOR(LKTM_CDEV_IOCTL_MAGIC,  1, u8 *)
+#define LKTM_CDEV_IOCTL_WRITE_STRING _IOW(LKTM_CDEV_IOCTL_MAGIC,  2, struct lktm_cdev_xfer *)
+#define LKTM_CDEV_IOCTL_RW_VALUE     _IOWR(LKTM_CDEV_IOCTL_MAGIC, 3, u32 *)
+
+static long dev_ioctl(struct file * f, unsigned int cmd, unsigned long arg)
+{
+  struct lkt_cdev *dev = f->private_data;
+  u32 new_value = 0;
+  struct lktm_cdev_xfer xfer = {0};
+  long result = 0;
+
+  switch(cmd)
+  {
+    case LKTM_CDEV_IOCTL_DO_NOTHING:
+      printk(KERN_DEBUG "dev: LKTM_CDEV_IOCTL_DO_NOTHING");
+    break;
+
+    case LKTM_CDEV_IOCTL_READ_MAGIC:
+      printk(KERN_DEBUG "dev: LKTM_CDEV_IOCTL_READ_MAGIC");
+      result = put_user(LKTM_CDEV_IOCTL_MAGIC, (u8 __user *)arg);
+      if(result < 0)
+      {
+        printk(KERN_WARNING "dev: unable to put data from user\n");
+        return -1;
+      }
+
+    break;
+
+    case LKTM_CDEV_IOCTL_WRITE_STRING:
+      printk(KERN_DEBUG "dev: LKTM_CDEV_IOCTL_WRITE_STRING");
+      
+      /* copy xfer structure from user */
+      result = copy_from_user(&xfer, (struct lktm_cdev_xfer __user *)arg, sizeof(struct lktm_cdev_xfer));
+      if(result != 0)
+      {
+        printk(KERN_WARNING "dev: unable to copy xfer structure\n");
+        return -1;
+      }
+    
+      /* copy data to buffer */
+      result = dev_write(f, xfer.buffer, xfer.size, 0);
+
+    break;
+
+    case LKTM_CDEV_IOCTL_RW_VALUE:
+      printk(KERN_DEBUG "dev: LKTM_CDEV_IOCTL_RW_VALUE");
+      
+      /* get new value, send old value back */
+      result = get_user(new_value, (u32 __user *)arg);
+      if(result < 0)
+      {
+        printk(KERN_WARNING "dev: unable to get data from user\n");
+        return result;
+      }
+
+      result = put_user(dev->value, (u32 __user *)arg);
+      if(result < 0)
+      {
+        printk(KERN_WARNING "dev: unable to put data from user\n");
+        return result;
+      }
+
+      dev->value = new_value;
+
+    break;
+
+    default:
+      printk(KERN_WARNING "wrong ioctl: 0x%x\n", cmd);
+
+  }
+
+  return result;
 }
