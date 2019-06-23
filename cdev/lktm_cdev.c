@@ -216,7 +216,8 @@ module_exit(dev_exit);
 
 static int dev_open(struct inode* node, struct file* f)
 {
-  printk(KERN_DEBUG "dev: open\n");
+  dev_t devno = node->i_cdev->dev;
+  printk(KERN_DEBUG "dev%d: open\n", MINOR(devno));
 
   /* put pointer to our lkt_cdev structure in privat data of file */
   f->private_data = container_of(node->i_cdev, struct lkt_cdev, cdev);
@@ -226,7 +227,8 @@ static int dev_open(struct inode* node, struct file* f)
 
 static int dev_release(struct inode* node, struct file* f)
 {
-  printk(KERN_DEBUG "dev: release\n");
+  dev_t devno = node->i_cdev->dev;
+  printk(KERN_DEBUG "dev%d: release\n", MINOR(devno));
 
   return 0;
 }
@@ -234,9 +236,10 @@ static int dev_release(struct inode* node, struct file* f)
 static ssize_t dev_read(struct file* f, char __user* user_buff, size_t size, loff_t* loff)
 {
   struct lkt_cdev *dev = f->private_data;
+  int minor = MINOR(dev->cdev.dev);
 
-  printk(KERN_DEBUG "dev: read\n");
-  printk(KERN_DEBUG "dev: dev->sz: %d, size: %d", dev->sz, size);
+  printk(KERN_DEBUG "dev%d: read\n", minor);
+  printk(KERN_DEBUG "dev%d: dev->sz: %d, size: %d", minor, dev->sz, size);
   
   if(NULL == dev->buff || 0 == dev->sz) return 0;
 
@@ -251,8 +254,9 @@ static ssize_t dev_read(struct file* f, char __user* user_buff, size_t size, lof
 static ssize_t dev_write(struct file* f, const char __user* user_buff, size_t size, loff_t* loff)
 {
   struct lkt_cdev *dev = f->private_data;
+  int minor = MINOR(dev->cdev.dev);
 
-  printk("dev: write\n");
+  printk("dev%d: write\n", minor);
 
   if(0 == size) return 0;
   
@@ -261,7 +265,7 @@ static ssize_t dev_write(struct file* f, const char __user* user_buff, size_t si
   dev->buff = kmalloc(size, GFP_KERNEL);
   if(NULL == dev->buff)
     {
-      printk(KERN_WARNING "dev: memory allocation fail\n");
+      printk(KERN_WARNING "dev%d: memory allocation fail\n", minor);
       return 0;
     }
 
@@ -270,7 +274,6 @@ static ssize_t dev_write(struct file* f, const char __user* user_buff, size_t si
 
   return size;
 }
-
 
 struct lktm_cdev_xfer
 {
@@ -288,6 +291,7 @@ struct lktm_cdev_xfer
 static long dev_ioctl(struct file * f, unsigned int cmd, unsigned long arg)
 {
   struct lkt_cdev *dev = f->private_data;
+  int minor = MINOR(dev->cdev.dev);
   u32 new_value = 0;
   struct lktm_cdev_xfer xfer = {0};
   long result = 0;
@@ -295,28 +299,28 @@ static long dev_ioctl(struct file * f, unsigned int cmd, unsigned long arg)
   switch(cmd)
   {
     case LKTM_CDEV_IOCTL_DO_NOTHING:
-      printk(KERN_DEBUG "dev: LKTM_CDEV_IOCTL_DO_NOTHING");
+      printk(KERN_DEBUG "dev%d: LKTM_CDEV_IOCTL_DO_NOTHING\n", minor);
     break;
 
     case LKTM_CDEV_IOCTL_READ_MAGIC:
-      printk(KERN_DEBUG "dev: LKTM_CDEV_IOCTL_READ_MAGIC");
+      printk(KERN_DEBUG "dev%d: LKTM_CDEV_IOCTL_READ_MAGIC", minor);
       result = put_user(LKTM_CDEV_IOCTL_MAGIC, (u8 __user *)arg);
       if(result < 0)
       {
-        printk(KERN_WARNING "dev: unable to put data from user\n");
+        printk(KERN_WARNING "dev%d: unable to put data from user\n", minor);
         return -1;
       }
 
     break;
 
     case LKTM_CDEV_IOCTL_WRITE_STRING:
-      printk(KERN_DEBUG "dev: LKTM_CDEV_IOCTL_WRITE_STRING");
+      printk(KERN_DEBUG "dev%d: LKTM_CDEV_IOCTL_WRITE_STRING\n", minor);
       
       /* copy xfer structure from user */
       result = copy_from_user(&xfer, (struct lktm_cdev_xfer __user *)arg, sizeof(struct lktm_cdev_xfer));
       if(result != 0)
       {
-        printk(KERN_WARNING "dev: unable to copy xfer structure\n");
+        printk(KERN_WARNING "dev%d: unable to copy xfer structure\n", minor);
         return -1;
       }
     
@@ -326,20 +330,20 @@ static long dev_ioctl(struct file * f, unsigned int cmd, unsigned long arg)
     break;
 
     case LKTM_CDEV_IOCTL_RW_VALUE:
-      printk(KERN_DEBUG "dev: LKTM_CDEV_IOCTL_RW_VALUE");
+      printk(KERN_DEBUG "dev%d: LKTM_CDEV_IOCTL_RW_VALUE\n", minor);
       
       /* get new value, send old value back */
       result = get_user(new_value, (u32 __user *)arg);
       if(result < 0)
       {
-        printk(KERN_WARNING "dev: unable to get data from user\n");
+        printk(KERN_WARNING "dev%d: unable to get data from user\n", minor);
         return result;
       }
 
       result = put_user(dev->value, (u32 __user *)arg);
       if(result < 0)
       {
-        printk(KERN_WARNING "dev: unable to put data from user\n");
+        printk(KERN_WARNING "dev%d: unable to put data from user\n", minor);
         return result;
       }
 
@@ -348,7 +352,7 @@ static long dev_ioctl(struct file * f, unsigned int cmd, unsigned long arg)
     break;
 
     default:
-      printk(KERN_WARNING "wrong ioctl: 0x%x\n", cmd);
+      printk(KERN_WARNING "dev%d: wrong ioctl: 0x%x\n", minor, cmd);
 
   }
 
