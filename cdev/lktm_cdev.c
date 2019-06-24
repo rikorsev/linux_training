@@ -6,6 +6,7 @@
 #include <linux/moduleparam.h> /* header for manage params of module*/
 #include <linux/cdev.h>        /* contains cdev struct and functions to work with it*/
 #include <linux/slab.h>        /* for kalloc function */
+#include <linux/kfifo.h>       /* for kfifo functions */
 
 MODULE_AUTHOR("Oleksandr Kolosov");
 MODULE_LICENSE("GPL");
@@ -22,12 +23,18 @@ module_param(dev_num, int, 0);
 static bool is_creat_node = false;
 module_param(is_creat_node, bool, 0);
 
+/* fifo len */
+static int fbuff_sz = 1024;
+module_param(fbuff_sz, int , 0);
+
 /* file operaion function prototypes */
-static int     dev_open   (struct inode* node, struct file* f);
-static int     dev_release(struct inode* node, struct file* f);
-static ssize_t dev_read   (struct file* f, char __user* user_buff, size_t size, loff_t* loff);
-static ssize_t dev_write  (struct file* f, const char __user* user_buff, size_t size, loff_t* loff);
-static long dev_ioctl(struct file * f, unsigned int cmd, unsigned long arg);
+static int     dev_open     (struct inode* node, struct file* f);
+static int     dev_release  (struct inode* node, struct file* f);
+static ssize_t dev_read     (struct file* f, char __user* user_buff, size_t size, loff_t* loff);
+static ssize_t dev_write    (struct file* f, const char __user* user_buff, size_t size, loff_t* loff);
+static ssize_t dev_write_bnb(struct file* f, const char __user* user_buff, size_t size, loff_t* loff);
+static ssize_t dev_read_bnb (struct file* f, char __user* user_buff, size_t size, loff_t* loff);
+static long    dev_ioctl    (struct file* f, unsigned int cmd, unsigned long arg);
 
 static struct file_operations dev_fops = {
   .owner          = THIS_MODULE,
@@ -38,12 +45,25 @@ static struct file_operations dev_fops = {
   .unlocked_ioctl = dev_ioctl
 };
 
+static struct file_operations dev_fops_bnb = {
+  .owner          = THIS_MODULE,
+  .open           = dev_open,
+  .release        = dev_release,
+  .read           = dev_read_bnb,
+  .write          = dev_write_bnb,
+  .unlocked_ioctl = dev_ioctl
+};
+
 struct lkt_cdev
 {
-  char*  buff;
-  size_t sz;
-  struct cdev cdev;
-  u32    value;
+  struct            cdev cdev;
+  char*             buff;
+  size_t            sz;
+  u32               value;
+  struct            kfifo fifo;
+  char              *fifo_buf;
+  wait_queue_head_t waitq_w;
+  wait_queue_head_t waitq_r;
 };
 
 /* pointer to cdev structure */
@@ -94,14 +114,27 @@ static int __init lktm_cdev_init_single(struct lkt_cdev *lkt_cdev, int major, in
 
   lkt_cdev->cdev.owner = THIS_MODULE;
 
+  /* Init wait queue */
+  init_waitqueue_head(&lkt_cdev->waitq_w);
+  init_waitqueue_head(&lkt_cdev->waitq_r);
+
+  /* Allocate and init fifo */
+  result = kfifo_alloc(&lkt_cdev->fifo, fbuff_sz, GFP_KERNEL);
+  if(result < 0)
+  {
+    printk(KERN_WARNING "dev%d: fail to allocate fifo. Result: %d", index, result);
+    return result;
+  }
+
   /* if nodes should be created from kernel space */
   if(is_creat_node == true)
   {
     dev = device_create(lktm_class, NULL, devno, NULL, "lktm%d", index);
     if(IS_ERR(dev))
     {
-      printk(KERN_WARNING "dev: can't create device. Result %d\n", result);
-      return PTR_ERR(dev);
+      printk(KERN_WARNING "dev%d: can't create device. Result %d\n", index, result);
+      result = PTR_ERR(dev);
+      goto free_fifo;
     }
   }
 
@@ -112,18 +145,23 @@ static int __init lktm_cdev_init_single(struct lkt_cdev *lkt_cdev, int major, in
   result = cdev_add(&lkt_cdev->cdev, devno, 1);
   if(result < 0)
   {
-    printk(KERN_WARNING "dev: device %d-%d - adding fail. Result: %d\n", major, index, result);
-    
-    /* Destroy device if it was created */
-    if(is_creat_node == true)
-    {
-      device_destroy(lktm_class, devno);
-    }
-    
-    return result;
+    printk(KERN_WARNING "dev%d: adding fail. Result: %d\n", index, result);
+    goto destroy_device;
   }
 
-  printk(KERN_DEBUG "dev: device %d-%d - added successfully\n", major, index);
+  printk(KERN_DEBUG "dev%d: added successfully\n", index);
+
+  return result;
+
+destroy_device:
+  /* Destroy device if it was created */
+  if(is_creat_node == true)
+  {
+    device_destroy(lktm_class, devno);
+  }
+
+free_fifo:
+  kfifo_free(&lkt_cdev->fifo);
 
   return result;
 }
@@ -185,6 +223,9 @@ static void __exit dev_exit(void)
 
   for(i = 0; i < dev_num; i++)
   {
+    /* Free fifo */
+    kfifo_free(&lkt_cdev[i].fifo);
+    
     /* Destroy created devfs device */
     if(is_creat_node == true)
     {
@@ -256,7 +297,7 @@ static ssize_t dev_write(struct file* f, const char __user* user_buff, size_t si
   struct lkt_cdev *dev = f->private_data;
   int minor = MINOR(dev->cdev.dev);
 
-  printk("dev%d: write\n", minor);
+  printk(KERN_DEBUG "dev%d: write\n", minor);
 
   if(0 == size) return 0;
   
@@ -275,6 +316,114 @@ static ssize_t dev_write(struct file* f, const char __user* user_buff, size_t si
   return size;
 }
 
+static ssize_t dev_write_bnb(struct file* f, const char __user* user_buff, size_t size, loff_t* loff)
+{
+  struct lkt_cdev *dev = f->private_data;
+  int minor            = MINOR(dev->cdev.dev);
+  int space            = 0;
+  size_t copied        = 0;
+  int result           = -EFAULT;
+
+  printk(KERN_DEBUG "dev%d: write\n", minor);
+
+  /* if operation is non blocked */
+  if (f->f_flags & O_NONBLOCK)
+  {
+    if(kfifo_is_full(&dev->fifo) == true)
+    {
+      return -EAGAIN;
+    }
+  }
+  /* if it is blocked */
+  else
+  {
+    /* check if fifo is full */
+    /* ATTENTION: pass queue by value, not by address */
+    result = wait_event_interruptible(dev->waitq_w, kfifo_is_full(&dev->fifo) != true);
+    if(result < 0)
+    {
+      printk(KERN_DEBUG "dev%d: write queue interrupted by signal\n", minor);
+      return result;
+    }
+  }
+
+  printk(KERN_DEBUG "dev%d: has free space in fifo\n", minor);
+
+  space = kfifo_avail(&dev->fifo);
+
+  size = size < space ? size : space;
+
+  result = kfifo_from_user(&dev->fifo, user_buff, size, &copied);
+  if(result < 0)
+  {
+    printk(KERN_WARNING "dev%d: fail to copy data from user space. Result: %d\n", minor, result);
+    return result;
+  }
+
+  /* wake up read queue */
+  if(copied > 0)
+  {
+      wake_up_interruptible(&dev->waitq_r);
+  }
+
+  printk(KERN_DEBUG "dev%d: copied: %d\n", minor, copied);
+
+  return copied;
+}
+
+static ssize_t dev_read_bnb(struct file* f, char __user* user_buff, size_t size, loff_t* loff)
+{
+  struct lkt_cdev *dev = f->private_data;
+  int minor            = MINOR(dev->cdev.dev);
+  int space            = 0;
+  size_t copied        = 0;
+  int result           = -EFAULT;
+
+  /* if operation is non blocked */
+  if (f->f_flags & O_NONBLOCK)
+  {
+    if(kfifo_is_empty(&dev->fifo) == true)
+    {
+      return -EAGAIN;
+    }
+  }
+  /* if it is blocked */
+  else
+  {
+    /* check if fifo is full */
+    /* ATTENTION: pass queue by value, not by address */
+    result = wait_event_interruptible(dev->waitq_r, kfifo_is_empty(&dev->fifo) != true);
+    if(result < 0)
+    {
+      printk(KERN_DEBUG "dev%d: write queue interrupted by signal\n", minor);
+      return result;
+    }
+  }
+
+  printk(KERN_DEBUG "dev%d: has data in fifo\n", minor);
+
+  space = kfifo_len(&dev->fifo);
+
+  size = size < space ? size : space;
+
+  result = kfifo_to_user(&dev->fifo, user_buff, size, &copied);
+  if(result < 0)
+  {
+    printk(KERN_WARNING "dev%d: fail to copy data to user space. Result: %d\n", minor, result);
+    return result;
+  }
+
+  /* wake up write queue */
+  if(copied > 0)
+  {
+      wake_up_interruptible(&dev->waitq_r);
+  }
+
+  printk(KERN_DEBUG "dev%d: copied: %d\n", minor, copied);
+
+  return copied;
+}
+
 struct lktm_cdev_xfer
 {
   u8 *buffer;
@@ -283,10 +432,14 @@ struct lktm_cdev_xfer
 
 #define LKTM_CDEV_IOCTL_MAGIC 0xF7
 
-#define LKTM_CDEV_IOCTL_DO_NOTHING   _IO(LKTM_CDEV_IOCTL_MAGIC,   0)
-#define LKTM_CDEV_IOCTL_READ_MAGIC   _IOR(LKTM_CDEV_IOCTL_MAGIC,  1, u8 *)
-#define LKTM_CDEV_IOCTL_WRITE_STRING _IOW(LKTM_CDEV_IOCTL_MAGIC,  2, struct lktm_cdev_xfer *)
-#define LKTM_CDEV_IOCTL_RW_VALUE     _IOWR(LKTM_CDEV_IOCTL_MAGIC, 3, u32 *)
+#define LKTM_CDEV_IOCTL_DO_NOTHING     _IO(LKTM_CDEV_IOCTL_MAGIC,   0)
+#define LKTM_CDEV_IOCTL_READ_MAGIC     _IOR(LKTM_CDEV_IOCTL_MAGIC,  1, u8 *)
+#define LKTM_CDEV_IOCTL_WRITE_STRING   _IOW(LKTM_CDEV_IOCTL_MAGIC,  2, struct lktm_cdev_xfer *)
+#define LKTM_CDEV_IOCTL_RW_VALUE       _IOWR(LKTM_CDEV_IOCTL_MAGIC, 3, u32 *)
+#define LKTM_CDEV_IOCTL_SWITCH_RW_FUNC _IOW(LKTM_CDEV_IOCTL_MAGIC,  4, u8)
+
+#define SIMPLE_RW_FUNC 0
+#define BNB_RW_FUNC    1
 
 static long dev_ioctl(struct file * f, unsigned int cmd, unsigned long arg)
 {
@@ -348,6 +501,35 @@ static long dev_ioctl(struct file * f, unsigned int cmd, unsigned long arg)
       }
 
       dev->value = new_value;
+
+    break;
+
+    case LKTM_CDEV_IOCTL_SWITCH_RW_FUNC:
+      printk(KERN_DEBUG "dev%d: LKTM_CDEV_IOCTL_SWITCH_RW_FUNC\n", minor);
+      
+      switch(arg)
+      {
+        case SIMPLE_RW_FUNC:
+          printk(KERN_DEBUG "dev%d: swich to simple rw functions\n", minor);
+
+          // dev->cdev.ops->read = dev_read;
+          // dev->cdev.ops->write = dev_write;
+
+          cdev_init(&dev->cdev, &dev_fops);
+        break;
+
+        case BNB_RW_FUNC:
+          printk(KERN_DEBUG "dev%d: switch to bloking/nonbloking rw functions\n", minor);
+
+          // dev->cdev.ops->read = dev_read_bnb;
+          // dev->cdev.ops->write = dev_write_bnb;
+
+          cdev_init(&dev->cdev, &dev_fops_bnb);
+
+        default:
+          printk(KERN_WARNING "dev%d: wrong argument\n", minor);
+          return -1;
+      }
 
     break;
 
