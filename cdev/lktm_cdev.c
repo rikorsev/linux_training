@@ -24,7 +24,7 @@ static bool is_creat_node = false;
 module_param(is_creat_node, bool, 0);
 
 /* fifo len */
-static int fbuff_sz = 1024;
+static int fbuff_sz = 128;
 module_param(fbuff_sz, int , 0);
 
 /* file operaion function prototypes */
@@ -331,6 +331,7 @@ static ssize_t dev_write_bnb(struct file* f, const char __user* user_buff, size_
   {
     if(kfifo_is_full(&dev->fifo) == true)
     {
+      printk(KERN_DEBUG "dev%d: fifo buffer is full\n", minor);
       return -EAGAIN;
     }
   }
@@ -384,6 +385,7 @@ static ssize_t dev_read_bnb(struct file* f, char __user* user_buff, size_t size,
   {
     if(kfifo_is_empty(&dev->fifo) == true)
     {
+      printk(KERN_DEBUG "dev%d: no data in fifo\n", minor);
       return -EAGAIN;
     }
   }
@@ -395,7 +397,7 @@ static ssize_t dev_read_bnb(struct file* f, char __user* user_buff, size_t size,
     result = wait_event_interruptible(dev->waitq_r, kfifo_is_empty(&dev->fifo) != true);
     if(result < 0)
     {
-      printk(KERN_DEBUG "dev%d: write queue interrupted by signal\n", minor);
+      printk(KERN_DEBUG "dev%d: read queue interrupted by signal\n", minor);
       return result;
     }
   }
@@ -416,7 +418,7 @@ static ssize_t dev_read_bnb(struct file* f, char __user* user_buff, size_t size,
   /* wake up write queue */
   if(copied > 0)
   {
-      wake_up_interruptible(&dev->waitq_r);
+      wake_up_interruptible(&dev->waitq_w);
   }
 
   printk(KERN_DEBUG "dev%d: copied: %d\n", minor, copied);
@@ -512,19 +514,14 @@ static long dev_ioctl(struct file * f, unsigned int cmd, unsigned long arg)
         case SIMPLE_RW_FUNC:
           printk(KERN_DEBUG "dev%d: swich to simple rw functions\n", minor);
 
-          // dev->cdev.ops->read = dev_read;
-          // dev->cdev.ops->write = dev_write;
-
           cdev_init(&dev->cdev, &dev_fops);
         break;
 
         case BNB_RW_FUNC:
           printk(KERN_DEBUG "dev%d: switch to bloking/nonbloking rw functions\n", minor);
 
-          // dev->cdev.ops->read = dev_read_bnb;
-          // dev->cdev.ops->write = dev_write_bnb;
-
           cdev_init(&dev->cdev, &dev_fops_bnb);
+        break;
 
         default:
           printk(KERN_WARNING "dev%d: wrong argument\n", minor);
